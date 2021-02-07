@@ -1,6 +1,6 @@
 # Keylight
 
-A CLI to control an [Elgato Key Light](https://www.elgato.com/en/gaming/key-light) for Linux and macOS.
+A CLI to control an [Elgato Key Light](https://www.elgato.com/en/gaming/key-light) for Linux, macOS, and Windows.
 
 Leverages the [pyleglight](https://gitlab.com/obviate.io/pyleglight) library.
 
