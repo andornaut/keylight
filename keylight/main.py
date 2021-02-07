@@ -11,6 +11,7 @@ def _connect(host, port):
 
 
 def _discover():
+    print('Auto-discovering Key Light ...')
     lights = leglight.discover(1)
     if not lights:
         print('Could not find a Key Light', file=sys.stderr)
@@ -25,10 +26,10 @@ def _main(flags: types.Flags):
     print(f'Connected to: {light}')
 
     if flags.brightness is not None:
-        print(f'Brightness: {flags.brightness}')
+        print(f'Brightness: {flags.brightness}%')
         light.brightness(flags.brightness)
     if flags.color is not None:
-        print(f'Color: {flags.color}')
+        print(f'Color: {flags.color}k')
         light.color(flags.color)
     if flags.on:
         print('Turning On')

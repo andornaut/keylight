@@ -21,9 +21,9 @@ def parse() -> types.Flags:
     parser.add_argument('-b', '--brightness', type=int,
                         help=f'{constants.MIN_BRIGHTNESS} <= brightness <= {constants.MAX_BRIGHTNESS}')
     parser.add_argument('-c', '--color', type=int, help='2900 <= color temperature <= 6987')
-    parser.add_argument('--host', help='Hostname (without the scheme or port) of the Key Light')
-    parser.add_argument('--on', action='store_true', help='Turn the Key Light on')
-    parser.add_argument('--off', action='store_true', help='Turn the Key Light off')
+    parser.add_argument('--host', help='hostname of the Key Light (omit to use auto-discovery)')
+    parser.add_argument('--on', action='store_true', help='turn the Key Light on')
+    parser.add_argument('--off', action='store_true', help='turn the Key Light off')
     args = parser.parse_args()
     if args.on and args.off:
         print('--on and --off flags are mutually exclusive', file=sys.stderr)

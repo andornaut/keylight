@@ -30,23 +30,23 @@ optional arguments:
                         0 <= brightness <= 100
   -c COLOR, --color COLOR
                         2900 <= color temperature <= 6987
-  --host HOST           Hostname (without the scheme or port) of the Key
-                        Light
-  --on                  Turn the Key Light on
-  --off                 Turn the Key Light off
+  --host HOST           hostname of the Key Light (omit to use auto-discovery)
+  --on                  turn the Key Light on
+  --off                 turn the Key Light off
 ```
 
 ### Examples
 
 ```
-$ keylight --host=keylight --brightness 25 --color 3500 --on
-Connected to: Elgato Light @ keylight:9123
-Brightness: 25
-Color: 3500
+$ keylight --brightness 45 --color 5500 --on
+Auto-discovering Key Light ...
+Connected to: Elgato Light @ 192.168.1.100:9123
+Brightness: 25%
+Color: 3500k
 Turning On
 
-$ keylight --off
-Connected to: Elgato Light @ 192.168.1.100:9123
+$ keylight --host=keylight --off
+Connected to: Elgato Light @ keylight:9123
 Turning Off
 ```
 
@@ -56,7 +56,10 @@ Turning Off
 # Build
 pip install --upgrade build
 python3 -m build
-pip install --upgrade dist/*.whl 
+pip install --upgrade dist/*.whl
+
+# Run
+python3 -m keylight.main --on
 
 # Publish
 pip install twine
