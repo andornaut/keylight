@@ -41,13 +41,30 @@ optional arguments:
 $ keylight --brightness 45 --color 5500 --on
 Auto-discovering Key Light ...
 Connected to: Elgato Light @ 192.168.1.100:9123
-Brightness: 25%
-Color: 3500k
+Brightness: 45%
+Color: 5500k
 Turning On
 
 $ keylight --host=keylight --off
 Connected to: Elgato Light @ keylight:9123
 Turning Off
+```
+
+#### Aliases
+
+You may find it convenient to use shell aliases:
+```
+alias koff='keylight --host keylight --off'
+alias kon='keylight --host keylight --on'
+```
+
+Example usage:
+```
+# Turn on and set brightness to 20%
+$ kon -b20
+Connected to: Elgato Light BW42J1A06055 @ keylight:9123
+Brightness: 20%
+Turning On
 ```
 
 ## Developing
@@ -57,6 +74,9 @@ Turning Off
 pip install --upgrade build
 python3 -m build
 pip install --upgrade dist/*.whl
+
+# If the version hasn't changed, then specify --force-reinstall
+pip install --upgrade --force-reinstall dist/*.whl
 
 # Run
 python3 -m keylight.main --on
