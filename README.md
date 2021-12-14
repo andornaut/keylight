@@ -83,5 +83,5 @@ python3 -m keylight.main --on
 
 # Publish
 pip install twine
-twine upload dist/
+twine upload dist/*
 ```
