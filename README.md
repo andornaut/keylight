@@ -70,6 +70,10 @@ Turning On
 ## Developing
 
 ```bash
+# Initialize venv
+python3 -m venv .venv
+source .venv/bin/activate
+
 # Build
 pip3 install --upgrade build
 python3 -m build
@@ -83,5 +87,5 @@ python3 -m keylight.main --on
 
 # Publish
 pip3 install twine
-twine upload dist/*
+python3 -m twine upload dist/*
 ```
