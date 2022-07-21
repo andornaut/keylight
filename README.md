@@ -13,7 +13,7 @@ Leverages the [pyleglight](https://gitlab.com/obviate.io/pyleglight) library.
 Keylight can be downloaded from [pypi.org](https://pypi.org/project/keylight/).
 
 ```bash
-pip install keylight
+pip3 install keylight
 ```
 
 ## Usage
@@ -71,17 +71,17 @@ Turning On
 
 ```bash
 # Build
-pip install --upgrade build
+pip3 install --upgrade build
 python3 -m build
-pip install --upgrade dist/*.whl
+pip3 install --upgrade dist/*.whl
 
 # If the version hasn't changed, then specify --force-reinstall
-pip install --upgrade --force-reinstall dist/*.whl
+pip3 install --upgrade --force-reinstall dist/*.whl
 
 # Run
 python3 -m keylight.main --on
 
 # Publish
-pip install twine
+pip3 install twine
 twine upload dist/*
 ```

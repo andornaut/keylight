@@ -1,17 +1,25 @@
 import sys
 
+import textwrap
 # https://gitlab.com/obviate.io/pyleglight/
 import leglight
 
 from keylight import cli, types
 
+# Ignore warning:
+# /opt/homebrew/lib/python3.9/site-packages/zeroconf/_services/browser.py:169: 
+# FutureWarning: <leglight.discovery.discover.<locals>.thelistener object at 0x101e15a00>
+# has no update_service method. Provide one (it can be empty if you don't care about the updates),
+# it'll become mandatory.
+# https://stackoverflow.com/a/14463362
+import warnings
+warnings.filterwarnings('ignore')
 
 def _connect(host, port):
     return leglight.LegLight(host, port)
 
 
 def _discover():
-    print('Auto-discovering Key Light ...')
     lights = leglight.discover(1)
     if not lights:
         print('Could not find a Key Light', file=sys.stderr)
@@ -23,20 +31,21 @@ def _discover():
 
 def _main(flags: types.Flags):
     light = _connect(flags.host, flags.port) if flags.host else _discover()
-    print(f'Connected to: {light}')
+    print(f'Connected to "{light.productName}" at {light.address}:{light.port}')
 
     if flags.brightness is not None:
-        print(f'Brightness: {flags.brightness}%')
         light.brightness(flags.brightness)
     if flags.color is not None:
-        print(f'Color: {flags.color}k')
         light.color(flags.color)
     if flags.on:
-        print('Turning On')
         light.on()
     if flags.off:
-        print('Turning Off')
         light.off()
+    print(textwrap.dedent(f'''\
+        Brightness: {light.isBrightness}%
+        Color temperature: {light.isTemperature:.0f}k
+        On/Off: {"On" if light.isOn else "Off"}'''
+    ))
 
 
 def main():
