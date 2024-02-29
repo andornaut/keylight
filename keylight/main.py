@@ -41,6 +41,11 @@ def _main(flags: types.Flags):
         light.on()
     if flags.off:
         light.off()
+    if flags.toggle:
+        if light.isOn:
+            light.off()
+        else:
+            light.on()
     print(textwrap.dedent(f'''\
         Brightness: {light.isBrightness}%
         Color temperature: {light.isTemperature:.0f}k

@@ -8,4 +8,5 @@ class Flags:
     host: str
     off: bool
     on: bool
+    toggle: bool
     port: int
