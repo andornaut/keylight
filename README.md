@@ -53,12 +53,14 @@ Turning Off
 #### Aliases
 
 You may find it convenient to use shell aliases:
+
 ```
 alias koff='keylight --host keylight --off'
 alias kon='keylight --host keylight --on'
 ```
 
 Example usage:
+
 ```
 # Turn on and set brightness to 20%
 $ kon -b20
