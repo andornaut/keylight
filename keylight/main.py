@@ -1,11 +1,5 @@
 import sys
-
 import textwrap
-
-# https://gitlab.com/obviate.io/pyleglight/
-import leglight
-
-from keylight import cli, types
 
 # Ignore warning:
 # /opt/homebrew/lib/python3.9/site-packages/zeroconf/_services/browser.py:169:
@@ -14,6 +8,11 @@ from keylight import cli, types
 # it'll become mandatory.
 # https://stackoverflow.com/a/14463362
 import warnings
+
+import leglight
+
+# https://gitlab.com/obviate.io/pyleglight/
+from keylight import cli, types
 
 warnings.filterwarnings("ignore")
 
@@ -36,10 +35,20 @@ def _main(flags: types.Flags):
     light = _connect(flags.host, flags.port) if flags.host else _discover()
     print(f'Connected to "{light.productName}" at {light.address}:{light.port}')
 
-    if flags.brightness is not None:
-        light.brightness(flags.brightness)
-    if flags.color is not None:
-        light.color(flags.color)
+    if flags.brightness_number is not None:
+        if flags.brightness_direction is types.Direction.ADD:
+            light.incBrightness(flags.brightness_number)
+        elif flags.brightness_direction is types.Direction.SUBTRACT:
+            light.decBrightness(flags.brightness_number)
+        else:
+            light.brightness(flags.brightness_number)
+    if flags.color_number is not None:
+        if flags.color_direction is types.Direction.ADD:
+            light.incColor(flags.color_number)
+        elif flags.color_direction is types.Direction.SUBTRACT:
+            light.decColor(flags.color_number)
+        else:
+            light.color(flags.color_number)
     if flags.on:
         light.on()
     if flags.off:
