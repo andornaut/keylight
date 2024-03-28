@@ -6,7 +6,7 @@ requires = ["poetry-core"]
 name = "keylight"
 authors = ["andornaut <andornaut@users.noreply.github.com>"]
 description = "A CLI to control an Elgato Key Light"
-version = "0.1.1"
+version = "0.1.2"
 readme = "README.md"
 
 [tool.poetry.dependencies]
