@@ -78,5 +78,6 @@ poetry build
 
 poetry run keylight --on
 
+poetry version patch
 poetry publish
 ```
