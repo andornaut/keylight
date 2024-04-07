@@ -57,9 +57,14 @@ def parse() -> types.Flags:
         "-b",
         "--brightness",
         type=str,
-        help=f"{constants.MIN_BRIGHTNESS} <= brightness <= {constants.MAX_BRIGHTNESS}",
+        help=f"{constants.MIN_BRIGHTNESS} <= BRIGHTNESS <= {constants.MAX_BRIGHTNESS}; Prefix with +/- to increment/decrement",
     )
-    parser.add_argument("-c", "--color", type=str, help="2900 <= color temperature <= 7000")
+    parser.add_argument(
+        "-c",
+        "--color",
+        type=str,
+        help=f"{constants.MIN_COLOR} <= COLOR <= {constants.MAX_COLOR}; Prefix with +/- to increment/decrement",
+    )
     parser.add_argument("--host", help="hostname of the Key Light (omit to use auto-discovery)")
     power_group = parser.add_mutually_exclusive_group()
     power_group.add_argument("--on", action="store_true", help="turn the Key Light on")

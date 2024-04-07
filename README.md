@@ -19,20 +19,21 @@ pip3 install keylight
 ## Usage
 
 ```
-$ keylight
-usage: keylight [-h] [-b BRIGHTNESS] [-c COLOR] [--host HOST] [--on] [--off]
+$ keylight --help
+usage: keylight [-h] [-b BRIGHTNESS] [-c COLOR] [--host HOST] [--on | --off | --toggle]
 
 A CLI to control an Elgato Key Light
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   -b BRIGHTNESS, --brightness BRIGHTNESS
-                        0 <= brightness <= 100
+                        0 <= BRIGHTNESS <= 100; Prefix with +/- to increment/decrement
   -c COLOR, --color COLOR
-                        2900 <= color temperature <= 6987
+                        2900 <= COLOR <= 7000; Prefix with +/- to increment/decrement
   --host HOST           hostname of the Key Light (omit to use auto-discovery)
   --on                  turn the Key Light on
   --off                 turn the Key Light off
+  --toggle              toggle the Key Light on/off
 ```
 
 ### Examples
