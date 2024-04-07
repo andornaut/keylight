@@ -36,16 +36,16 @@ def _main(flags: types.Flags):
     print(f'Connected to "{light.productName}" at {light.address}:{light.port}')
 
     if flags.brightness_number is not None:
-        if flags.brightness_direction is types.Direction.INCREMENT:
+        if flags.brightness_direction is types.Operation.INCREMENT:
             light.incBrightness(flags.brightness_number)
-        elif flags.brightness_direction is types.Direction.DECREMENT:
+        elif flags.brightness_direction is types.Operation.DECREMENT:
             light.decBrightness(flags.brightness_number)
         else:
             light.brightness(flags.brightness_number)
     if flags.color_number is not None:
-        if flags.color_direction is types.Direction.INCREMENT:
+        if flags.color_direction is types.Operation.INCREMENT:
             light.incColor(flags.color_number)
-        elif flags.color_direction is types.Direction.DECREMENT:
+        elif flags.color_direction is types.Operation.DECREMENT:
             light.decColor(flags.color_number)
         else:
             light.color(flags.color_number)

@@ -2,17 +2,17 @@ import dataclasses
 import enum
 
 
-class Direction(enum.Enum):
-    ABSOLUTE = enum.auto()
+class Operation(enum.Enum):
     DECREMENT = enum.auto()
     INCREMENT = enum.auto()
+    SET = enum.auto()
 
 
 @dataclasses.dataclass
 class Flags:
-    brightness_direction: Direction
+    brightness_direction: Operation
     brightness_number: str
-    color_direction: Direction
+    color_direction: Operation
     color_number: str
     host: str
     off: bool
