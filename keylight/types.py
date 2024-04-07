@@ -3,15 +3,15 @@ import enum
 
 
 class Direction(enum.Enum):
-    ADD = enum.auto()
-    SUBTRACT = enum.auto()
     ABSOLUTE = enum.auto()
+    DECREMENT = enum.auto()
+    INCREMENT = enum.auto()
 
 
 @dataclasses.dataclass
 class Flags:
-    brightness_direction: int
-    brightness_number: int
+    brightness_direction: Direction
+    brightness_number: str
     color_direction: Direction
     color_number: str
     host: str

@@ -72,22 +72,11 @@ Turning On
 ## Developing
 
 ```bash
-# Initialize venv
-python3 -m venv .venv
-source .venv/bin/activate
+poetry shell
 
-# Build
-pip3 install --upgrade build
-python3 -m build
-pip3 install --upgrade dist/*.whl
+poetry build
 
-# If the version hasn't changed, then specify --force-reinstall
-pip3 install --upgrade --force-reinstall dist/*.whl
+poetry run keylight --on
 
-# Run
-python3 -m keylight.main --on
-
-# Publish
-pip3 install twine
-python3 -m twine upload dist/*
+poetry publish
 ```
