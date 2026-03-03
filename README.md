@@ -1,84 +1,93 @@
-# Keylight
+# keylight
 
-A CLI to control an [Elgato Key Light](https://www.elgato.com/en/gaming/key-light) for Linux, macOS, and Windows.
+A modern CLI to control [Elgato Key Lights](https://www.elgato.com/en/gaming/key-light) across Linux, macOS, and Windows.
 
-Leverages the [pyleglight](https://gitlab.com/obviate.io/pyleglight) library.
+Built with [Typer](https://typer.tiangolo.com/) and powered by the [pyleglight](https://gitlab.com/obviate.io/pyleglight) library.
 
 ## Requirements
 
-* Python >= 3.6
+* Python ~3.12
 
 ## Installation
 
-Keylight can be downloaded from [pypi.org](https://pypi.org/project/keylight/).
+Install `keylight` via `pip` or [pipx](https://github.com/pypa/pipx) (recommended for CLIs):
 
 ```bash
-pip3 install keylight
+pipx install keylight
 ```
 
 ## Usage
 
-```
-$ keylight --help
-usage: keylight [-h] [-b BRIGHTNESS] [-c COLOR] [--host HOST] [--on | --off | --toggle]
+```text
+Usage: keylight [OPTIONS]
 
-A CLI to control an Elgato Key Light
-
-options:
-  -h, --help            show this help message and exit
-  -b BRIGHTNESS, --brightness BRIGHTNESS
-                        0 <= BRIGHTNESS <= 100; Prefix with +/- to increment/decrement
-  -c COLOR, --color COLOR
-                        2900 <= COLOR <= 7000; Prefix with +/- to increment/decrement
-  --host HOST           hostname of the Key Light (omit to use auto-discovery)
-  --on                  turn the Key Light on
-  --off                 turn the Key Light off
-  --toggle              toggle the Key Light on/off
+Options:
+  -b, --brightness TEXT  0 <= BRIGHTNESS <= 100; Prefix with +/- to increment/decrement
+  -c, --color TEXT       2900 <= COLOR <= 7000; Prefix with +/- to increment/decrement
+  --host TEXT            hostname of the Key Light (omit to use auto-discovery)
+  --on                   turn the Key Light on
+  --off                  turn the Key Light off
+  --toggle               toggle the Key Light on/off
+  --help                 Show this message and exit.
 ```
 
 ### Examples
 
-```
-$ keylight --brightness 45 --color 5500 --on
-Auto-discovering Key Light ...
-Connected to: Elgato Light @ 192.168.1.100:9123
-Brightness: 45%
-Color: 5500k
-Turning On
-
-$ keylight --host=keylight --off
-Connected to: Elgato Light @ keylight:9123
-Turning Off
-```
-
-#### Aliases
-
-You may find it convenient to use shell aliases:
-
-```
-alias koff='keylight --host keylight --off'
-alias kon='keylight --host keylight --on'
-```
-
-Example usage:
-
-```
-# Turn on and set brightness to 20%
-$ kon -b20
-Connected to: Elgato Light BW42J1A06055 @ keylight:9123
-Brightness: 20%
-Turning On
-```
-
-## Developing
+**Auto-discovery and basic control:**
 
 ```bash
+$ keylight --brightness 45 --color 5500 --on
+Connected to "Elgato Key Light" at 192.168.1.100:9123
+Brightness: 45%
+Color temperature: 5500k
+On/Off: On
+```
+
+**Direct host connection and relative adjustments:**
+
+```bash
+$ keylight --host 192.168.1.105 --brightness +10
+Connected to "Elgato Key Light Air" at 192.168.1.105:9123
+Brightness: 55%
+Color temperature: 5500k
+On/Off: On
+```
+
+**Toggling power:**
+
+```bash
+$ keylight --toggle
+Connected to "Elgato Key Light" at 192.168.1.100:9123
+Brightness: 55%
+Color temperature: 5500k
+On/Off: Off
+```
+
+#### Shell Aliases
+
+For quicker access, you can define shell aliases in your `.bashrc` or `.zshrc`:
+
+```bash
+alias kon='keylight --on'
+alias koff='keylight --off'
+alias ktoggle='keylight --toggle'
+```
+
+## Development
+
+`keylight` uses [Poetry](https://python-poetry.org/) for dependency management and packaging.
+
+```bash
+# Enter the virtual environment
 poetry shell
 
+# Run the CLI during development
+poetry run keylight --help
+
+# Lint and format
+poetry run ruff check .
+
+# Build and publish
 poetry build
-
-poetry run keylight --on
-
-poetry version patch
 poetry publish
 ```
