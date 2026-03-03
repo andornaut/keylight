@@ -12,7 +12,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "~3.12"
 leglight = "^0.2.0"
-typer = "^0.15.0"
+typer = "^0.24.1"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.15.4"
