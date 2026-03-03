@@ -1,20 +1,13 @@
 import sys
 import textwrap
-
-# Ignore warning:
-# /opt/homebrew/lib/python3.9/site-packages/zeroconf/_services/browser.py:169:
-# FutureWarning: <leglight.discovery.discover.<locals>.thelistener object at 0x101e15a00>
-# has no update_service method. Provide one (it can be empty if you don't care about the updates),
-# it'll become mandatory.
-# https://stackoverflow.com/a/14463362
-import warnings
+from typing import Annotated, Optional
 
 import leglight
+import typer
 
-# https://gitlab.com/obviate.io/pyleglight/
-from keylight import cli, types
+from keylight import cli, constants, types
 
-warnings.filterwarnings("ignore")
+app = typer.Typer(help="A CLI to control an Elgato Key Light", add_completion=False)
 
 
 def _connect(host, port):
@@ -25,39 +18,77 @@ def _discover():
     lights = leglight.discover(1)
     if not lights:
         print("Could not find a Key Light", file=sys.stderr)
-        exit(1)
+        raise typer.Exit(code=1)
     if len(lights) > 1:
         print(f"Found {len(lights)} Key Lights. Using the first.")
     return lights[0]
 
 
-def _main(flags: types.Flags):
-    light = _connect(flags.host, flags.port) if flags.host else _discover()
+@app.command()
+def run(
+    brightness: Annotated[
+        Optional[str],
+        typer.Option(
+            "--brightness",
+            "-b",
+            help=f"{constants.MIN_BRIGHTNESS} <= BRIGHTNESS <= {constants.MAX_BRIGHTNESS}; Prefix with +/- to increment/decrement",
+        ),
+    ] = None,
+    color: Annotated[
+        Optional[str],
+        typer.Option(
+            "--color",
+            "-c",
+            help=f"{constants.MIN_COLOR} <= COLOR <= {constants.MAX_COLOR}; Prefix with +/- to increment/decrement",
+        ),
+    ] = None,
+    host: Annotated[Optional[str], typer.Option(help="hostname of the Key Light (omit to use auto-discovery)")] = None,
+    on: Annotated[bool, typer.Option("--on", help="turn the Key Light on")] = False,
+    off: Annotated[bool, typer.Option("--off", help="turn the Key Light off")] = False,
+    toggle: Annotated[bool, typer.Option("--toggle", help="toggle the Key Light on/off")] = False,
+):
+    (brightness_direction, brightness_number) = cli.normalize(
+        "Brightness",
+        brightness,
+        constants.MIN_BRIGHTNESS,
+        constants.MAX_BRIGHTNESS,
+    )
+    (color_direction, color_number) = cli.normalize(
+        "Color",
+        color,
+        constants.MIN_COLOR,
+        constants.MAX_COLOR,
+    )
+
+    light = _connect(host, constants.DEFAULT_PORT) if host else _discover()
     print(f'Connected to "{light.productName}" at {light.address}:{light.port}')
 
-    if flags.brightness_number is not None:
-        if flags.brightness_direction is types.Operation.INCREMENT:
-            light.incBrightness(flags.brightness_number)
-        elif flags.brightness_direction is types.Operation.DECREMENT:
-            light.decBrightness(flags.brightness_number)
+    if brightness_number is not None:
+        if brightness_direction is types.Operation.INCREMENT:
+            light.incBrightness(brightness_number)
+        elif brightness_direction is types.Operation.DECREMENT:
+            light.decBrightness(brightness_number)
         else:
-            light.brightness(flags.brightness_number)
-    if flags.color_number is not None:
-        if flags.color_direction is types.Operation.INCREMENT:
-            light.incColor(flags.color_number)
-        elif flags.color_direction is types.Operation.DECREMENT:
-            light.decColor(flags.color_number)
+            light.brightness(brightness_number)
+
+    if color_number is not None:
+        if color_direction is types.Operation.INCREMENT:
+            light.incColor(color_number)
+        elif color_direction is types.Operation.DECREMENT:
+            light.decColor(color_number)
         else:
-            light.color(flags.color_number)
-    if flags.on:
+            light.color(color_number)
+
+    if on:
         light.on()
-    if flags.off:
+    if off:
         light.off()
-    if flags.toggle:
+    if toggle:
         if light.isOn:
             light.off()
         else:
             light.on()
+
     print(
         textwrap.dedent(
             f"""\
@@ -69,7 +100,7 @@ def _main(flags: types.Flags):
 
 
 def main():
-    _main(cli.parse())
+    app()
 
 
 if __name__ == "__main__":

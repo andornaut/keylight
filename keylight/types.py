@@ -1,5 +1,6 @@
 import dataclasses
 import enum
+from typing import Optional
 
 
 class Operation(enum.Enum):
@@ -11,10 +12,10 @@ class Operation(enum.Enum):
 @dataclasses.dataclass
 class Flags:
     brightness_direction: Operation
-    brightness_number: str
+    brightness_number: Optional[int]
     color_direction: Operation
-    color_number: str
-    host: str
+    color_number: Optional[int]
+    host: Optional[str]
     off: bool
     on: bool
     toggle: bool

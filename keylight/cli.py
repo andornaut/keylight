@@ -1,12 +1,12 @@
-import argparse
 import sys
+from typing import Optional, Tuple
 
 import typer
 
-from keylight import constants, types
+from keylight import types
 
 
-def _normalize(name: str, value: str, min_number: int, max_number: int):
+def normalize(name: str, value: Optional[str], min_number: int, max_number: int) -> Tuple[types.Operation, Optional[int]]:
     if value is None:
         return types.Operation.SET, None
 
@@ -34,7 +34,7 @@ def _normalize(name: str, value: str, min_number: int, max_number: int):
     return (direction, number)
 
 
-def _parse_int(name: str, value: str) -> tuple[types.Operation, int]:
+def _parse_int(name: str, value: str) -> Tuple[types.Operation, int]:
     try:
         if value.startswith("+"):
             direction = types.Operation.INCREMENT
@@ -49,44 +49,3 @@ def _parse_int(name: str, value: str) -> tuple[types.Operation, int]:
     except ValueError:
         print(f"{name} must be in the form '[+-]integer' or 'integer'", file=sys.stderr)
         raise typer.Exit(code=1)
-
-
-def parse() -> types.Flags:
-    parser = argparse.ArgumentParser(description="A CLI to control an Elgato Key Light")
-    parser.add_argument(
-        "-b",
-        "--brightness",
-        type=str,
-        help=f"{constants.MIN_BRIGHTNESS} <= BRIGHTNESS <= {constants.MAX_BRIGHTNESS}; Prefix with +/- to increment/decrement",
-    )
-    parser.add_argument(
-        "-c",
-        "--color",
-        type=str,
-        help=f"{constants.MIN_COLOR} <= COLOR <= {constants.MAX_COLOR}; Prefix with +/- to increment/decrement",
-    )
-    parser.add_argument("--host", help="hostname of the Key Light (omit to use auto-discovery)")
-    power_group = parser.add_mutually_exclusive_group()
-    power_group.add_argument("--on", action="store_true", help="turn the Key Light on")
-    power_group.add_argument("--off", action="store_true", help="turn the Key Light off")
-    power_group.add_argument("--toggle", action="store_true", help="toggle the Key Light on/off")
-    args = parser.parse_args()
-
-    (brightness_direction, brightness_number) = _normalize(
-        "Brightness",
-        args.brightness,
-        constants.MIN_BRIGHTNESS,
-        constants.MAX_BRIGHTNESS,
-    )
-    (color_direction, color_number) = _normalize("Color", args.color, constants.MIN_COLOR, constants.MAX_COLOR)
-    return types.Flags(
-        brightness_direction,
-        brightness_number,
-        color_direction,
-        color_number,
-        host=args.host,
-        on=args.on,
-        off=args.off,
-        toggle=args.toggle,
-        port=constants.DEFAULT_PORT,
-    )
