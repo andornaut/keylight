@@ -15,12 +15,11 @@ def _connect(host, port):
 
 
 def _discover():
-    lights = leglight.discover(1)
+    lights = leglight.discover(constants.DISCOVERY_TIMEOUT)
     if not lights:
-        print("Could not find a Key Light", file=sys.stderr)
-        raise typer.Exit(code=1)
+        cli.fail("Could not find a Key Light")
     if len(lights) > 1:
-        print(f"Found {len(lights)} Key Lights. Using the first.")
+        print(f"Found {len(lights)} Key Lights. Using the first.", file=sys.stderr)
     return lights[0]
 
 
@@ -43,9 +42,10 @@ def run(
         ),
     ] = None,
     host: Annotated[Optional[str], typer.Option(help="hostname of the Key Light (omit to use auto-discovery)")] = None,
-    on: Annotated[bool, typer.Option("--on", help="turn the Key Light on")] = False,
-    off: Annotated[bool, typer.Option("--off", help="turn the Key Light off")] = False,
-    toggle: Annotated[bool, typer.Option("--toggle", help="toggle the Key Light on/off")] = False,
+    power: Annotated[
+        Optional[types.Power],
+        typer.Option("--power", "-p", help="turn the Key Light on, off, or toggle it"),
+    ] = None,
 ):
     (brightness_direction, brightness_number) = cli.normalize(
         "Brightness",
@@ -79,15 +79,12 @@ def run(
         else:
             light.color(color_number)
 
-    if on:
+    if power is types.Power.on:
         light.on()
-    if off:
+    elif power is types.Power.off:
         light.off()
-    if toggle:
-        if light.isOn:
-            light.off()
-        else:
-            light.on()
+    elif power is types.Power.toggle:
+        light.off() if light.isOn else light.on()
 
     print(
         textwrap.dedent(

@@ -1,6 +1,4 @@
-import dataclasses
 import enum
-from typing import Optional
 
 
 class Operation(enum.Enum):
@@ -9,14 +7,7 @@ class Operation(enum.Enum):
     SET = enum.auto()
 
 
-@dataclasses.dataclass
-class Flags:
-    brightness_direction: Operation
-    brightness_number: Optional[int]
-    color_direction: Operation
-    color_number: Optional[int]
-    host: Optional[str]
-    off: bool
-    on: bool
-    toggle: bool
-    port: int
+class Power(str, enum.Enum):
+    on = "on"
+    off = "off"
+    toggle = "toggle"

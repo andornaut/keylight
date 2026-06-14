@@ -6,3 +6,6 @@ MIN_COLOR = 2900
 MAX_COLOR = 7000
 
 DEFAULT_PORT = 9123
+
+# Seconds to wait for Zeroconf discovery to find a Key Light.
+DISCOVERY_TIMEOUT = 1

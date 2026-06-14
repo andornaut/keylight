@@ -22,13 +22,11 @@ pipx install keylight
 Usage: keylight [OPTIONS]
 
 Options:
-  -b, --brightness TEXT  0 <= BRIGHTNESS <= 100; Prefix with +/- to increment/decrement
-  -c, --color TEXT       2900 <= COLOR <= 7000; Prefix with +/- to increment/decrement
-  --host TEXT            hostname of the Key Light (omit to use auto-discovery)
-  --on                   turn the Key Light on
-  --off                  turn the Key Light off
-  --toggle               toggle the Key Light on/off
-  --help                 Show this message and exit.
+  -b, --brightness TEXT       0 <= BRIGHTNESS <= 100; Prefix with +/- to increment/decrement
+  -c, --color TEXT            2900 <= COLOR <= 7000; Prefix with +/- to increment/decrement
+  --host TEXT                 hostname of the Key Light (omit to use auto-discovery)
+  -p, --power [on|off|toggle] turn the Key Light on, off, or toggle it
+  --help                      Show this message and exit.
 ```
 
 ### Examples
@@ -36,7 +34,7 @@ Options:
 **Auto-discovery and basic control:**
 
 ```bash
-$ keylight --brightness 45 --color 5500 --on
+$ keylight --brightness 45 --color 5500 --power on
 Connected to "Elgato Key Light" at 192.168.1.100:9123
 Brightness: 45%
 Color temperature: 5500k
@@ -56,7 +54,7 @@ On/Off: On
 **Toggling power:**
 
 ```bash
-$ keylight --toggle
+$ keylight --power toggle
 Connected to "Elgato Key Light" at 192.168.1.100:9123
 Brightness: 55%
 Color temperature: 5500k
@@ -68,9 +66,9 @@ On/Off: Off
 For quicker access, you can define shell aliases in your `.bashrc` or `.zshrc`:
 
 ```bash
-alias kon='keylight --on'
-alias koff='keylight --off'
-alias ktoggle='keylight --toggle'
+alias kon='keylight --power on'
+alias koff='keylight --power off'
+alias ktoggle='keylight --power toggle'
 ```
 
 ## Development
