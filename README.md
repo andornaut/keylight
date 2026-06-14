@@ -84,6 +84,7 @@ poetry run keylight --help
 
 # Lint and format
 poetry run ruff check .
+poetry run ruff format --check .
 
 # Build and publish
 poetry build
