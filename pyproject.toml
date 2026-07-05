@@ -18,7 +18,7 @@ typer = "^0.26.7"
 keylight = "keylight.main:main"
 
 [tool.poetry.group.dev.dependencies]
-ruff = "0.15.17"
+ruff = "0.15.18"
 
 [tool.ruff]
 line-length = 120
