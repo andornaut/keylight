@@ -1,6 +1,6 @@
 import sys
 import textwrap
-from typing import Annotated, Optional
+from typing import Annotated
 
 import leglight
 import typer
@@ -26,7 +26,7 @@ def _discover():
 @app.command()
 def run(
     brightness: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--brightness",
             "-b",
@@ -34,16 +34,16 @@ def run(
         ),
     ] = None,
     color: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--color",
             "-c",
             help=f"{constants.MIN_COLOR} <= COLOR <= {constants.MAX_COLOR}; Prefix with +/- to increment/decrement",
         ),
     ] = None,
-    host: Annotated[Optional[str], typer.Option(help="hostname of the Key Light (omit to use auto-discovery)")] = None,
+    host: Annotated[str | None, typer.Option(help="hostname of the Key Light (omit to use auto-discovery)")] = None,
     power: Annotated[
-        Optional[types.Power],
+        types.Power | None,
         typer.Option("--power", "-p", help="turn the Key Light on, off, or toggle it"),
     ] = None,
 ):

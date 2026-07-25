@@ -12,13 +12,13 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "~3.12"
 leglight = "^0.2.0"
-typer = "^0.26.7"
+typer = "^0.27.0"
 
 [tool.poetry.scripts]
 keylight = "keylight.main:main"
 
 [tool.poetry.group.dev.dependencies]
-ruff = "0.15.21"
+ruff = "0.16.0"
 
 [tool.ruff]
 line-length = 120

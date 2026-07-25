@@ -1,5 +1,5 @@
 import sys
-from typing import NoReturn, Optional, Tuple
+from typing import NoReturn
 
 import typer
 
@@ -12,8 +12,8 @@ def fail(message: str) -> NoReturn:
 
 
 def normalize(
-    name: str, value: Optional[str], min_number: int, max_number: int
-) -> Tuple[types.Operation, Optional[int]]:
+    name: str, value: str | None, min_number: int, max_number: int
+) -> tuple[types.Operation, int | None]:
     if value is None:
         return types.Operation.SET, None
 
@@ -40,7 +40,7 @@ def normalize(
     return (direction, number)
 
 
-def _parse_int(name: str, value: str) -> Tuple[types.Operation, int]:
+def _parse_int(name: str, value: str) -> tuple[types.Operation, int]:
     try:
         if value.startswith("+"):
             direction = types.Operation.INCREMENT
