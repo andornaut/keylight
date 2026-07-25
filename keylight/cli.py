@@ -11,9 +11,7 @@ def fail(message: str) -> NoReturn:
     raise typer.Exit(code=1)
 
 
-def normalize(
-    name: str, value: str | None, min_number: int, max_number: int
-) -> tuple[types.Operation, int | None]:
+def normalize(name: str, value: str | None, min_number: int, max_number: int) -> tuple[types.Operation, int | None]:
     if value is None:
         return types.Operation.SET, None
 
