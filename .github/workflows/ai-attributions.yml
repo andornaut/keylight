@@ -1,0 +1,32 @@
+name: AI attributions
+
+# Every branch, not just pull requests: work lands on main directly as often as
+# it arrives through one.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ai-attributions:
+    name: AI attributions
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      # Scans what the push or the pull request added, not the history it
+      # arrived on, and fails with the commands to take an attribution back off.
+      - name: Scan for AI attributions
+        uses: andornaut/ai-attributions@v1
