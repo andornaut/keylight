@@ -6,6 +6,10 @@ on:
   push:
     branches: ["**"]
   pull_request:
+  # Called by the release workflow, so that nothing is published that this has
+  # not passed. Workflows do not wait on each other, so a green scan beside a
+  # release says nothing about whether the release waited for it.
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -13,9 +17,10 @@ permissions:
 
 # Keyed on the branch rather than the ref, so the push event and the pull
 # request event for one branch share a group instead of running the same scan
-# twice.
+# twice. Keyed by the calling workflow as well, so the run started by a push
+# and the run the release workflow calls do not cancel each other.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  group: attributions-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
