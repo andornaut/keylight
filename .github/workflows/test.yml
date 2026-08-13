@@ -1,4 +1,4 @@
-name: Lint
+name: Test
 
 # Every branch, not just main and pull requests: work lands on main directly as
 # often as it arrives through one, so a check that only runs on main is a check
@@ -15,14 +15,18 @@ permissions:
 
 # Keyed on the branch rather than the ref, so the push event and the pull
 # request event for one branch share a group instead of running the same checks
-# twice.
+# twice. Qualified by the repository the branch lives in, since a fork names its
+# branches itself: a pull request from a fork's main would otherwise share a
+# group with a push to this one and cancel it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   lint:
+    name: Lint
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v7.0.1
