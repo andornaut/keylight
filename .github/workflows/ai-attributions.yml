@@ -15,15 +15,18 @@ on:
 permissions:
   contents: read
 
-# Keyed on the branch rather than the ref, so the push event and the pull
-# request event for one branch share a group instead of running the same scan
-# twice. Keyed by the calling workflow as well, so the run started by a push
-# and the run the release workflow calls do not cancel each other. Qualified by
-# the repository the branch lives in, since a fork names its branches itself: a
-# pull request from a fork's main would otherwise share a group with a push to
-# this one and cancel it.
+# Keyed on the branch rather than the ref, so a re-push to one branch cancels
+# its own earlier scan and not another branch's. Keyed by the event as well: a
+# cancelled run leaves its check runs on the head commit, and GitHub counts
+# those against the required checks, so a push and its pull request cancelling
+# each other would block the merge.
+# Keyed by the calling workflow as well, so the run started by a push and the
+# run the release workflow calls do not cancel each other.
+# Qualified by the repository the branch lives in, since a fork names its
+# branches itself: two pull requests from different forks would otherwise share
+# a group whenever they pick the same branch name.
 concurrency:
-  group: attributions-${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  group: attributions-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
