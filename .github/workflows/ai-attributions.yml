@@ -41,3 +41,7 @@ jobs:
       # arrived on, and fails with the commands to take an attribution back off.
       - name: Scan for AI attributions
         uses: andornaut/ai-attributions@v1
+        with:
+          # Agent instruction files are local-only, so a branch that ships one
+          # fails here rather than waiting for a nightly sweep to notice.
+          agents-files: true
