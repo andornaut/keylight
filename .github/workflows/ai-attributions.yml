@@ -48,6 +48,7 @@ jobs:
           # Agent instruction files are local-only, so a branch that ships one
           # fails here rather than waiting for a nightly sweep to notice.
           agents-files: true
-          # An emdash is house style rather than an ad, so a message carrying
-          # one fails beside the attributions instead of being left alone.
+          # An emdash or an endash is house style rather than an ad, so a
+          # message carrying one fails beside the attributions instead of being
+          # left alone.
           emdashes: true
