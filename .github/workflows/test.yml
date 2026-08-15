@@ -39,11 +39,20 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Bootstrap only. Nothing linted comes from this pin, so a poetry release
+      # cannot change what the checks below reject.
+      - name: Install poetry
+        run: pip install poetry==2.4.1
+
+      # Resolved from poetry.lock rather than installed by name, so the ruff
+      # this runs is the one pyproject.toml declares and Dependabot bumps.
+      # --no-root because linting reads the sources in place and does not need
+      # the project installed.
       - name: Install dependencies
-        run: pip install ruff==0.15.16
+        run: poetry install --only dev --no-root
 
       - name: Run ruff check
-        run: ruff check .
+        run: poetry run ruff check .
 
       - name: Run ruff format check
-        run: ruff format --check .
+        run: poetry run ruff format --check .
