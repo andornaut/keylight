@@ -20,5 +20,3 @@ keylight = "keylight.main:main"
 [tool.poetry.group.dev.dependencies]
 ruff = "0.16.3"
 
-[tool.ruff]
-line-length = 120
