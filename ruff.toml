@@ -1,6 +1,6 @@
-# Matches ai-maintainer and splinter-keyboard, the other repositories linted
-# with ruff here. The sources were written wider than ruff's 88-column default,
-# and reflowing them buys nothing.
+# Matches ai-maintainer, ansible-ctrl and splinter-keyboard, the other
+# repositories linted with ruff here. The sources were written wider than
+# ruff's 88-column default, and reflowing them buys nothing.
 line-length = 120
 
 [lint]
