@@ -74,7 +74,7 @@ alias koff='keylight --power off'
 alias ktoggle='keylight --power toggle'
 ```
 
-## Development
+## Developing
 
 `keylight` uses [Poetry](https://python-poetry.org/) for dependency management and packaging.
 
