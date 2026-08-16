@@ -7,7 +7,7 @@ class Operation(enum.Enum):
     SET = enum.auto()
 
 
-class Power(str, enum.Enum):
+class Power(enum.StrEnum):
     on = "on"
     off = "off"
     toggle = "toggle"
