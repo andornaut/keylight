@@ -37,7 +37,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7.0.0
         with:
-          python-version: "3.12"
+          python-version-file: .python-version
 
       # Bootstrap only. Nothing linted comes from this pin, so a poetry release
       # cannot change what the checks below reject.
