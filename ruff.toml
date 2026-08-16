@@ -36,10 +36,6 @@ ignore = [
     "TRY300",
     "TRY301",
     "PERF203",
-    # os.path is correct and not deprecated. Rewriting it to pathlib changes the
-    # type flowing through these scripts, and none of them has a test that would
-    # catch a bad rewrite.
-    "PTH",
 ]
 
 [lint.per-file-ignores]
