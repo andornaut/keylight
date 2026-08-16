@@ -2,3 +2,48 @@
 # with ruff here. The sources were written wider than ruff's 88-column default,
 # and reflowing them buys nothing.
 line-length = 120
+
+[lint]
+# Every rule ruff has, then what is given up and why. The version is pinned in
+# each gate's manifest, so this set only moves when a commit moves it.
+select = ["ALL"]
+ignore = [
+    # Mandates rather than checks: an annotation on every signature, a docstring
+    # on every module and function, a copyright header on every file.
+    "ANN",
+    "D",
+    "CPY",
+    # The formatter owns commas and quoting; ruff documents these as conflicting
+    # with it.
+    "COM",
+    # Bans print(). These are command line scripts, where print is the output.
+    "T20",
+    # Style preferences about call shape and where an exception's message lives.
+    "FBT",
+    "EM",
+    "TRY003",
+    "PLR2004",
+    # Size and complexity ceilings. Worth watching, not worth failing a build on,
+    # and the Go gates here give up the same ones.
+    "C901",
+    "PLR0911",
+    "PLR0912",
+    "PLR0913",
+    "PLR0915",
+    "PLR0917",
+    # Mandate a control-flow shape: a return moved into an else, a raise
+    # hoisted into its own function, a try that may not sit in a loop.
+    "TRY300",
+    "TRY301",
+    "PERF203",
+    # os.path is correct and not deprecated. Rewriting it to pathlib changes the
+    # type flowing through these scripts, and none of them has a test that would
+    # catch a bad rewrite.
+    "PTH",
+]
+
+[lint.per-file-ignores]
+# A test asserts, reaches into the unit it covers, and writes stubs whose
+# arguments exist to match a signature rather than to be read.
+"**/test_*.py" = ["ARG", "S101", "SLF001"]
+"**/*_test.py" = ["ARG", "S101", "SLF001"]

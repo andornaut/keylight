@@ -18,7 +18,8 @@ def normalize(name: str, value: str | None, min_number: int, max_number: int) ->
     direction, number = _parse_int(name, value)
 
     if number < 0:
-        # This can't currently happen, b/c eg. "--10" will be parsed as a long-arg "--" instead of "decrement by negative 10"
+        # This can't currently happen, b/c eg. "--10" will be parsed as a
+        # long-arg "--" instead of "decrement by negative 10"
         # Nevertheless, this function should guard against it, b/c the caller could change.
         fail(f"{name} must be >=0")
     elif number < min_number:

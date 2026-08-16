@@ -30,7 +30,8 @@ def run(
         typer.Option(
             "--brightness",
             "-b",
-            help=f"{constants.MIN_BRIGHTNESS} <= BRIGHTNESS <= {constants.MAX_BRIGHTNESS}; Prefix with +/- to increment/decrement",
+            help=f"{constants.MIN_BRIGHTNESS} <= BRIGHTNESS <= {constants.MAX_BRIGHTNESS}; "
+            "Prefix with +/- to increment/decrement",
         ),
     ] = None,
     color: Annotated[
