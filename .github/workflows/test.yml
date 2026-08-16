@@ -36,6 +36,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7.0.1
+        with:
+          # Nothing in this job uses the token, so it is not left
+          # in .git/config for a later step to read.
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v7.0.0
