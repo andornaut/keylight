@@ -111,10 +111,10 @@ jobs:
           name: dist
           path: artifacts
 
-      # Publishing here does not publish to PyPI: `poetry publish` is still run
-      # by hand, and this release is what identifies the commit it was built
-      # from. The version is only ever cut from a tag, so the notes and the
-      # latest marker are unconditional.
+      # This release is what identifies the commit the archives were built
+      # from; the publish job below sends that same pair on to PyPI. The
+      # version is only ever cut from a tag, so the notes and the latest marker
+      # are unconditional.
       - name: Publish release
         uses: softprops/action-gh-release@v3.0.2
         env:
@@ -125,3 +125,38 @@ jobs:
           generate_release_notes: true
           make_latest: "true"
           files: artifacts/*
+
+  # Behind `release` rather than beside it, so the tag and the GitHub release
+  # naming a version exist before PyPI carries it; a version cannot be taken
+  # back off PyPI the way a GitHub release can be edited. Gated on a tag like
+  # every job above, this repository having no rolling `dev` cut to exclude.
+  publish:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    # id-token is the whole credential: the step below exchanges this job's OIDC
+    # claim for a short-lived PyPI API token, so nothing long-lived is stored
+    # as a secret. The trusted publisher registered on pypi.org names this
+    # repository and this workflow file, so renaming either stops the publish
+    # until it is renamed there too. No environment is named here, so the one
+    # on pypi.org stays empty as well.
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      # No checkout, as in the job above: what is uploaded is the pair the build
+      # job produced, and nothing here is read out of the tree.
+      - name: Download build artifact
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: dist
+          # `dist/` because that is where gh-action-pypi-publish looks unless
+          # told otherwise. Unpacking the build job's artifact here is what
+          # makes the sdist and wheel PyPI receives the same two files the
+          # GitHub release carries, rather than a second build of one version.
+          path: dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.14.2
