@@ -1,0 +1,70 @@
+# The Markdown gate. Named .markdownlint-cli2.yaml in a repository, where both
+# the workflow step and a bare local `markdownlint-cli2` read it.
+#
+# The file list lives here rather than in the step, which passes an empty
+# `globs` so this one is used: a step naming its own glob leaves a local run
+# checking a different set of files from the gate.
+
+# What CI sees is the checkout, which is the tracked files and nothing else: no
+# node_modules, no vendor/, no .venv, no build output. A working copy has all of
+# them, so without this a local run reports hundreds of findings in third-party
+# Markdown that the gate will never look at, and `--fix` rewrites it in place.
+gitignore: true
+
+globs:
+  - "**/*.md"
+
+# Read alongside gitignore above, which does not cover everything the checkout
+# leaves out. A submodule is tracked as a commit rather than as files, so CI
+# checks out an empty directory while a working copy holds the whole upstream
+# tree; gitignore says nothing about it, and a repository that adds one names it
+# here. node_modules is named because it is not gitignored in every repository
+# that has one. The trailing `**` is what excludes a tree: a glob ending at the
+# directory name matches nothing and is dropped silently.
+#
+# The agent directories and instruction files are excluded by the global
+# gitignore rather than by a repository's own, and gitignore above reads only
+# the ones in the tree. So CI, which checks out tracked files, never sees them,
+# while a working copy holds them and would report findings the gate cannot.
+ignores:
+  - "**/node_modules/**"
+  - ".agents/**"
+  - ".claude/**"
+  - AGENTS.md
+  - CLAUDE.md
+  - GEMINI.md
+
+# Every rule markdownlint has, then what is given up and why.
+config:
+  # Line length, which defaults to 80. Tables and link-bearing prose here run
+  # past any column worth setting, and rewrapping them buys nothing.
+  MD013: false
+  # Inline HTML. <kbd> marks up key names in the keybinding tables, and Markdown
+  # has no equivalent, so this rule rejects correct markup rather than finding
+  # anything wrong with it.
+  MD033: false
+  # Spaces inside emphasis. An asterisk here is usually a glob or a
+  # multiplication sign, `*.glsl, *.glslp` and `Thickness * Width * Length`, and
+  # the rule reads both as emphasis that someone padded. CommonMark does not:
+  # neither closing asterisk is right-flanking, so none of it renders as
+  # emphasis and there is nothing to correct. Left on, its fix closes the gap
+  # and changes what the text says.
+  MD037: false
+  # Table pipe style, and pipe alignment. Both take their expected style from
+  # the first table in a file, so one table decides for every other one, and a
+  # single row brought into line flips the expectation and puts every remaining
+  # table out. Neither changes what renders. A table whose first cell is empty
+  # also cannot be written in the compact style most of these files use: the
+  # row has to open with a pipe, which the rule then reads as a style break.
+  #
+  # MD056 stays on below: a row short of a cell silently drops data, which is
+  # not a style question.
+  MD055: false
+  MD060: false
+  # Duplicate headings, narrowed rather than turned off. A README that documents
+  # two commands gives each an Example and a Usage under its own heading, which
+  # the rule rejects by default because it compares against every heading in the
+  # document. Restricted to siblings, it still catches the same name twice in
+  # one section, which is the case that makes an anchor ambiguous.
+  MD024:
+    siblings_only: true

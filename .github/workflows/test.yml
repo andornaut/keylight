@@ -63,3 +63,15 @@ jobs:
 
       - name: Run ruff format check
         run: poetry run ruff format --check .
+
+      # The action bundles markdownlint-cli2, so its own tag is the tool pin and
+      # Dependabot proposes the bump through the github-actions ecosystem. It
+      # fetches nothing at run time, so a slow host cannot turn this red.
+      - name: Run markdownlint
+        uses: DavidAnson/markdownlint-cli2-action@v24.2.0
+        with:
+          # Empty on purpose. The action defaults this to `*.{md,markdown}`,
+          # which is the repository root only, and anything passed here outranks
+          # the `globs` in .markdownlint-cli2.yaml. Empty leaves the config file
+          # deciding, so this gate and a local `markdownlint-cli2` read one list.
+          globs: ""
