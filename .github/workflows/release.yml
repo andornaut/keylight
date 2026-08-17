@@ -12,7 +12,8 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Write access is granted only to the jobs that create releases
+# Write access is granted per job rather than here: `contents` to the job that
+# creates releases, `id-token` to the job that publishes to the registry.
 permissions:
   contents: read
 
@@ -75,7 +76,7 @@ jobs:
       - name: Install poetry
         run: pip install poetry==2.4.1
 
-      # The sdist and the wheel, the same pair `poetry publish` uploads to PyPI,
+      # The sdist and the wheel, the same pair the publish job uploads to PyPI,
       # so what a release holds is what an install resolves to.
       - name: Build the distribution
         run: poetry build
@@ -98,7 +99,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    # The one job that writes.
+    # The job that writes `contents`. The publish job below writes nothing but
+    # its own `id-token`.
     permissions:
       contents: write
 
