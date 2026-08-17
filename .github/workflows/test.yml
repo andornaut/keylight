@@ -8,6 +8,10 @@ on:
     branches: ["**"]
   pull_request:
     branches: [main]
+  # Called by the release workflow, so that nothing is published that this has
+  # not passed. Workflows do not wait on each other, so a green Test run beside
+  # a release says nothing about whether the release waited for it.
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -18,11 +22,13 @@ permissions:
 # cancelled run leaves its check runs on the head commit, and GitHub counts
 # those against the required checks, so a push and its pull request cancelling
 # each other would block the merge.
+# Keyed by the calling workflow as well, so the run started by a push and the
+# run the release workflow calls do not cancel each other.
 # Qualified by the repository the branch lives in, since a fork names its
 # branches itself: two pull requests from different forks would otherwise share
 # a group whenever they pick the same branch name.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  group: test-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:

@@ -1,6 +1,6 @@
 # keylight
 
-[![CI](https://github.com/andornaut/keylight/actions/workflows/test.yml/badge.svg)](https://github.com/andornaut/keylight/actions/workflows/test.yml)
+[![CI](https://github.com/andornaut/keylight/actions/workflows/release.yml/badge.svg)](https://github.com/andornaut/keylight/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A modern CLI to control [Elgato Key Lights](https://www.elgato.com/en/gaming/key-light) across Linux, macOS, and Windows.

@@ -1,0 +1,127 @@
+name: Release
+
+# Every branch, not just main and pull requests: work lands on main directly as
+# often as it arrives through one, so a check that only runs on main is a check
+# that runs after the fact.
+on:
+  push:
+    branches: ["**"]
+    # Release versions only, the same set protect-release-tags guards.
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Write access is granted only to the jobs that create releases
+permissions:
+  contents: read
+
+# Keyed on the branch rather than the ref, so a re-push to one branch cancels
+# its own earlier run and not another branch's. Keyed by the event as well: a
+# cancelled run leaves its check runs on the head commit, and GitHub counts
+# those against the required checks, so a push and its pull request cancelling
+# each other would block the merge.
+# Qualified by the repository the branch lives in, since a fork names its
+# branches itself: two pull requests from different forks would otherwise share
+# a group whenever they pick the same branch name.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  # Publishing waits on the scan as well: a release is a durable artifact, and
+  # taking an attribution back off after one is cut means rewriting history that
+  # has already been published. Called only where a release can follow, since
+  # the scan workflow already runs on every push and pull request of its own
+  # accord.
+  attributions:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/ai-attributions.yml
+
+  # Publishing waits on the same checks that guard main, rather than on the
+  # build alone: something that packages cleanly still ships whatever the checks
+  # would have caught. Called only where a release can follow, since the Test
+  # workflow already runs on every push and pull request of its own accord.
+  test:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/test.yml
+
+  # Runs on every push and pull request, not only on a tag: a build that is
+  # first attempted at release time is a build whose breakage is found with the
+  # version already cut.
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    # Capped well under the six-hour default: nothing here runs longer than
+    # six minutes, so a job still going at fifteen has hung rather than failed.
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+        with:
+          # Nothing in this job uses the token, so it is not left
+          # in .git/config for a later step to read.
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7.0.0
+        with:
+          python-version-file: .python-version
+
+      # Pinned rather than installed by name: this is the tool that builds what
+      # ships, so a poetry release must not change the archives a tag produces
+      # without a commit saying so.
+      - name: Install poetry
+        run: pip install poetry==2.4.1
+
+      # The sdist and the wheel, the same pair `poetry publish` uploads to PyPI,
+      # so what a release holds is what an install resolves to.
+      - name: Build the distribution
+        run: poetry build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: dist
+          path: dist/*
+
+  # Tags only, with no rolling `dev` release beside it, unlike the other
+  # repositories here. A wheel takes its version from its filename and pip reads
+  # it back from there, so a dev cut cannot reuse one asset name the way an
+  # archive of a binary does: every version bump would leave the wheel before it
+  # in place, since an upload replaces only a file it can match by name. The
+  # install route is `pipx install keylight` against PyPI, so a rolling wheel
+  # here would have no consumer to justify that.
+  release:
+    needs: [build, test, attributions]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    # The one job that writes.
+    permissions:
+      contents: write
+
+    steps:
+      # No checkout: the assets come from the build job, and the notes below are
+      # generated from the tag by GitHub rather than read out of the tree.
+      - name: Download build artifact
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: dist
+          path: artifacts
+
+      # Publishing here does not publish to PyPI: `poetry publish` is still run
+      # by hand, and this release is what identifies the commit it was built
+      # from. The version is only ever cut from a tag, so the notes and the
+      # latest marker are unconditional.
+      - name: Publish release
+        uses: softprops/action-gh-release@v3.0.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          make_latest: "true"
+          files: artifacts/*
