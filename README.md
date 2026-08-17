@@ -22,14 +22,20 @@ pipx install keylight
 ## Usage
 
 ```text
-Usage: keylight [OPTIONS]
+$ keylight --help
+ Usage: keylight [OPTIONS]
 
-Options:
-  -b, --brightness TEXT       0 <= BRIGHTNESS <= 100; Prefix with +/- to increment/decrement
-  -c, --color TEXT            2900 <= COLOR <= 7000; Prefix with +/- to increment/decrement
-  --host TEXT                 hostname of the Key Light (omit to use auto-discovery)
-  -p, --power [on|off|toggle] turn the Key Light on, off, or toggle it
-  --help                      Show this message and exit.
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --brightness  -b      <str>            0 <= BRIGHTNESS <= 100; Prefix with   │
+│                                        +/- to increment/decrement            │
+│ --color       -c      <str>            2900 <= COLOR <= 7000; Prefix with    │
+│                                        +/- to increment/decrement            │
+│ --host                <str>            hostname of the Key Light (omit to    │
+│                                        use auto-discovery)                   │
+│ --power       -p      <on|off|toggle>  turn the Key Light on, off, or toggle │
+│                                        it                                    │
+│ --help                                 Show this message and exit.           │
+╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ### Examples
