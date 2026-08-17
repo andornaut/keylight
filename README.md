@@ -96,7 +96,22 @@ poetry run keylight --help
 poetry run ruff check .
 poetry run ruff format --check .
 
-# Build and publish
+# Build the sdist and wheel, as the Release workflow does
 poetry build
-poetry publish
 ```
+
+## Publishing
+
+1. Bump `version` in `pyproject.toml`
+2. Commit the change
+3. Tag the commit `vX.Y.Z` and push the tag
+
+Pushing the tag is the whole release. The Release workflow runs the checks,
+builds the distribution, cuts the GitHub release, and uploads that same sdist
+and wheel to PyPI. `poetry publish` is not run by hand.
+
+Nothing here holds a PyPI API token. The workflow authenticates with a
+short-lived credential minted from its own OIDC claim, against a trusted
+publisher registered on PyPI that names this repository and
+`.github/workflows/release.yml`. Renaming that file stops publishing until the
+trusted publisher is updated to match.
