@@ -79,8 +79,9 @@ alias ktoggle='keylight --power toggle'
 `keylight` uses [Poetry](https://python-poetry.org/) for dependency management and packaging.
 
 ```bash
-# Enter the virtual environment
-poetry shell
+# Enter the virtual environment. Poetry 2, which CI pins, has no `shell`
+# command: `env activate` prints the activation command rather than running it.
+eval $(poetry env activate)
 
 # Run the CLI during development
 poetry run keylight --help
