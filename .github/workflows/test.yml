@@ -30,8 +30,8 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     # Capped well under the six-hour default: nothing here runs longer than
-    # six minutes, so a job still going at thirty has hung rather than failed.
-    timeout-minutes: 30
+    # six minutes, so a job still going at fifteen has hung rather than failed.
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
