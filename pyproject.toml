@@ -8,6 +8,9 @@ authors = ["andornaut <andornaut@users.noreply.github.com>"]
 description = "A CLI to control an Elgato Key Light"
 version = "0.2.1"
 readme = "README.md"
+license = "MIT"
+homepage = "https://github.com/andornaut/keylight"
+repository = "https://github.com/andornaut/keylight"
 
 [tool.poetry.dependencies]
 python = "~3.12"
