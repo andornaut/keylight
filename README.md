@@ -4,7 +4,7 @@
 [![CI](https://github.com/andornaut/keylight/actions/workflows/release.yml/badge.svg)](https://github.com/andornaut/keylight/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A modern CLI to control [Elgato Key Lights](https://www.elgato.com/en/gaming/key-light) across Linux, macOS, and Windows.
+A modern CLI to control [Elgato Key Lights](https://www.elgato.com/p/key-light) across Linux, macOS, and Windows.
 
 Built with [Typer](https://typer.tiangolo.com/) and powered by the [pyleglight](https://gitlab.com/obviate.io/pyleglight) library.
 
