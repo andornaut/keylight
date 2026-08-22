@@ -37,10 +37,9 @@ ignore = [
     "PLR0915",
     "PLR0917",
     # Mandate a control-flow shape: a return moved into an else, a raise
-    # hoisted into its own function, a try that may not sit in a loop.
+    # hoisted into its own function.
     "TRY300",
     "TRY301",
-    "PERF203",
 ]
 
 [lint.per-file-ignores]
