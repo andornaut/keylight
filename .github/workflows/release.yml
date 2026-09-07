@@ -144,7 +144,7 @@ jobs:
       # version is only ever cut from a tag, so the notes and the latest marker
       # are unconditional.
       - name: Publish release
-        uses: softprops/action-gh-release@v3.0.2
+        uses: softprops/action-gh-release@v3.0.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
