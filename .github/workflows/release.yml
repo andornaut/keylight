@@ -25,12 +25,9 @@ permissions:
 # Qualified by the repository the branch lives in, since a fork names its
 # branches itself: two pull requests from different forks would otherwise share
 # a group whenever they pick the same branch name.
-# On main a run is never cancelled, since commits landing there seconds apart
-# would otherwise leave the earlier one with no result. A newer run waits for
-# the running one instead, and GitHub keeps only the latest waiting run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: true
 
 jobs:
   # Publishing waits on the scan as well: a release is a durable artifact, and
