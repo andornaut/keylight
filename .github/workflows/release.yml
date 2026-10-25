@@ -134,7 +134,7 @@ jobs:
       # No checkout: the assets come from the build job, and the notes below are
       # generated from the tag by GitHub rather than read out of the tree.
       - name: Download build artifact
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8.0.2
         with:
           name: dist
           path: artifacts
@@ -177,7 +177,7 @@ jobs:
       # No checkout, as in the job above: what is uploaded is the pair the build
       # job produced, and nothing here is read out of the tree.
       - name: Download build artifact
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8.0.2
         with:
           name: dist
           # `dist/` because that is where gh-action-pypi-publish looks unless
