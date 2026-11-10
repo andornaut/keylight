@@ -1,7 +1,7 @@
 ARG PYTHON_VERSION=3.12
 FROM koalaman/shellcheck:v0.11.0 AS shellcheck
 
-FROM node:24.22.2 AS markdown
+FROM node:26.12.1 AS markdown
 WORKDIR /opt/markdown
 COPY tests/container/package.json tests/container/package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
