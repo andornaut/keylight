@@ -91,7 +91,6 @@ and scratch storage.
 make check
 make lint
 make build
-make check-info
 ```
 
 The full gate runs Ruff, Markdown lint and distribution packaging. No test suite

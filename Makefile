@@ -13,10 +13,7 @@ export CHECK_TIMEOUT_SECONDS CHECK_MEMORY CHECK_SCRATCH_SIZE CHECK_WORK_SIZE CHE
 
 export CHECK_ADMISSION
 
-.PHONY: check check-info lint test build exec
+.PHONY: check lint test build exec
 
 check lint test build exec:
 	@./tests/container/run $@
-
-check-info:
-	@./tests/container/run info
