@@ -49,6 +49,8 @@ if [[ ${action} == exec ]]; then
     if [[ $(id -u) == 0 ]]; then printf '%s\n' 'Writable exec requires a non-root host user.' >&2; exit 2; fi
     container_user=$(id -u):$(id -g)
 fi
+container_uid=${container_user%%:*}
+container_gid=${container_user#*:}
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/project-check.XXXXXXXX")
 cidfile=${scratch}/container.id
 run_id=${scratch##*/}
@@ -144,6 +146,28 @@ snapshot() {
     collect_source "${checkout}" '' > "${scratch}/source.list"
     tar --create --file "${output}" --directory "${checkout}" \
         --null --verbatim-files-from --no-recursion --files-from "${scratch}/source.list"
+    chmod 0644 "${output}"
+}
+admission_path=
+if [[ -n ${CHECK_ADMISSION:-} ]]; then
+    if excluded "${CHECK_ADMISSION}"; then printf 'Invalid resource admission path: %s\n' "${CHECK_ADMISSION}" >&2; exit 2; fi
+    contained "${CHECK_ADMISSION}"
+    admission_path=${checkout}/${CHECK_ADMISSION}
+    if [[ -L ${admission_path} || ! -f ${admission_path} || ! -x ${admission_path} ]]; then
+        printf 'Resource admission must be a regular executable inside the checkout: %s\n' "${CHECK_ADMISSION}" >&2
+        exit 2
+    fi
+fi
+run_admission() {
+    local phase=$1 status
+    if [[ -z ${admission_path} ]]; then return 0; fi
+    if (cd "${checkout}" && timeout --signal=TERM --kill-after=2 5 "${admission_path}" "${phase}") >&2; then
+        return 0
+    else
+        status=$?
+        printf 'Resource admission rejected phase %s (status %s).\n' "${phase}" "${status}" >&2
+        return "${status}"
+    fi
 }
 contained tests/container/context
 if [[ -L ${checkout}/tests/container/context ]]; then printf '%s\n' 'Container context manifest must not be a symlink.' >&2; exit 2; fi
@@ -157,7 +181,7 @@ while IFS= read -r path || [[ -n ${path} ]]; do
     printf '%s\0' "${path}"
 done < "${checkout}/tests/container/context" > "${scratch}/context.list"
 tar --create --file "${scratch}/context.tar" --directory "${checkout}" \
-    --null --verbatim-files-from --no-recursion --files-from "${scratch}/context.list"
+    --mode='u+rwX,go+rX' --null --verbatim-files-from --no-recursion --files-from "${scratch}/context.list"
 revision=$("${git_metadata[@]}" -C "${checkout}" rev-parse HEAD)
 source_epoch=$("${git_metadata[@]}" -C "${checkout}" show -s --format=%ct HEAD)
 source_dirty=false
@@ -180,13 +204,22 @@ if [[ ${build_help} != *--resource* || ${build_help} != *--ulimit* ]]; then
     printf '%s\n' 'Docker build requires CPU, memory and nofile limit support; uncapped builds are disabled.' >&2
     exit 2
 fi
+run_admission build-image
 timeout --signal=TERM --kill-after=10 "${limit}" \
     docker build --resource cpu-period=100000 --resource cpu-quota=400000 \
     --resource "memory=${memory_limit}" --ulimit nofile=256:256 \
     --tag "${image}" --iidfile "${scratch}/image.id" --file tests/container/Dockerfile "${build_args[@]}" - \
     < "${scratch}/context.tar" >&2
 image=$(cat "${scratch}/image.id")
-read -r -a outputs <<< "${BUILD_OUTPUTS:-}"
+outputs=()
+export_requested=0
+if [[ ${action} == build ]]; then
+    read -r -a outputs <<< "${BUILD_OUTPUTS:-}"
+    export_requested=1
+elif [[ ${action} == test ]]; then
+    read -r -a outputs <<< "${TEST_OUTPUTS:-}"
+    if (( ${#outputs[@]} )); then export_requested=1; fi
+fi
 for output in "${outputs[@]}"; do
     if excluded "${output}"; then printf 'Invalid build output path: %s\n' "${output}" >&2; exit 2; fi
     IFS=/ read -r -a components <<< "${output}"
@@ -195,7 +228,7 @@ for output in "${outputs[@]}"; do
     done
 done
 run_category() {
-    local category=$1 network=none status dispatcher=${1}
+    local category=$1 network=none status dispatcher=${1} phase=${1}
     shift
     if [[ ${category} == exec ]]; then network=bridge; fi
     if [[ ${category} == lint ]]; then network=${CHECK_NETWORK_LINT:-none}; fi
@@ -210,9 +243,10 @@ run_category() {
             mounts+=(--mount "type=bind,source=${scratch}/git-mask,target=/work/.git,readonly")
         fi
     else
-        mounts+=(--mount "type=bind,source=${scratch}/source.tar,target=/source.tar,readonly" --tmpfs "/work:rw,exec,nosuid,size=${work_size},mode=1777")
+        mounts+=(--mount "type=bind,source=${scratch}/source.tar,target=/source.tar,readonly" --tmpfs "/work:rw,exec,nosuid,size=${work_size},uid=${container_uid},gid=${container_gid},mode=1777")
     fi
-    if [[ ${category} == command ]]; then dispatcher='exec'; fi
+    if [[ ${category} == command ]]; then dispatcher='exec'; phase='exec'; fi
+    run_admission "${phase}"
     if [[ ${category} == exec ]]; then
         printf 'CLEANUP (added %s): Remove only after the owned container is absent.\nrun=%s\nscratch=%s\ncidfile=%s\n' \
             "$(date -u +%F)" "${run_id}" "${scratch}" "${cidfile}" > "${scratch}/marker.state"
@@ -237,7 +271,7 @@ run_category() {
         --env "CHECK_TASKS=${CHECK_TASKS:-}" --env "COMMAND=${COMMAND:-}" \
         --env "CHECK_REVISION=${revision}" --env "CHECK_SOURCE_SHA256=${source_hash}" --env "CHECK_SOURCE_DIRTY=${source_dirty}" \
         --env "SOURCE_DATE_EPOCH=${source_epoch}" \
-        --env "BUILD_OUTPUTS=${BUILD_OUTPUTS:-}" --env "CHECK_EXPORT=$([[ ${action} == build ]] && printf 1 || printf 0)" \
+        --env "BUILD_OUTPUTS=${BUILD_OUTPUTS:-}" --env "TEST_OUTPUTS=${TEST_OUTPUTS:-}" --env "CHECK_EXPORT=${export_requested}" \
         --env "CHECK_WRITABLE=$([[ ${category} == exec ]] && printf 1 || printf 0)" \
         --entrypoint /bin/sh "${image}" -ec '
             mkdir -p /scratch/home
@@ -246,7 +280,7 @@ run_category() {
             if [ "$CHECK_WRITABLE" = 1 ]; then export HUSKY=0; fi
             if [ "$CHECK_EXPORT" = 1 ]; then
                 /opt/check/run "$@" >&2
-                set -- $BUILD_OUTPUTS
+                if [ "$1" = test ]; then set -- $TEST_OUTPUTS; else set -- $BUILD_OUTPUTS; fi
                 for output in "$@"; do
                     case "$(realpath -e "$output")" in /work/*) ;; *) printf "Build output escapes work directory: %s\n" "$output" >&2; exit 2 ;; esac
                     if [ -n "$(find "$output" ! -type f ! -type d -print -quit)" ]; then
@@ -269,8 +303,10 @@ if [[ ${action} == check ]]; then
         timeout --signal=TERM --kill-after=2 10 docker rm "$(cat "${cidfile}")" >/dev/null
         unlink "${cidfile}"
     done
-elif [[ ${action} == build ]]; then
-    run_category build "$@" > "${scratch}/artifacts.tar"
+elif [[ ${export_requested} == 1 ]]; then
+    focused=()
+    if [[ ${action} == test && -n ${TEST_ARGS:-} ]]; then read -r -a focused <<< "${TEST_ARGS}"; fi
+    run_category "${action}" "${focused[@]}" "$@" > "${scratch}/artifacts.tar"
 else
     focused=()
     if [[ ${action} == test && -n ${TEST_ARGS:-} ]]; then read -r -a focused <<< "${TEST_ARGS}"; fi
@@ -282,27 +318,111 @@ if [[ ${action} != exec ]]; then
     after=$("${git_metadata[@]}" -C "${checkout}" status --porcelain=v1 --untracked-files=all; "${git_metadata[@]}" -C "${checkout}" rev-parse HEAD; sha256sum "${scratch}/after.tar" | cut -d ' ' -f1)
     if [[ ${before} != "${after}" ]]; then printf '%s\n' 'Discarding check result: source changed during verification.' >&2; exit 125; fi
 fi
-if [[ ${action} == build ]]; then
-    mkdir "${scratch}/outputs"
-    tar --extract --file "${scratch}/artifacts.tar" --directory "${scratch}/outputs" --no-same-owner
-    for output in "${outputs[@]}"; do
-        stage=${scratch}/outputs/${output}
-        destination=${checkout}
+publish_outputs() (
+    areas=()
+    destinations=()
+    names=()
+    # The publication subshell invokes this callback through its EXIT trap.
+    # shellcheck disable=SC2329
+    cleanup_publish() {
+        status=$?
+        trap - EXIT
+        for area in "${areas[@]}"; do
+            if [[ -e ${area}/previous || -L ${area}/previous ]]; then
+                printf 'Prior generated output is preserved at %s.\n' "${area}/previous" >&2
+                status=2
+            else
+                find "${area}" -depth -delete || status=2
+            fi
+        done
+        exit "${status}"
+    }
+    trap cleanup_publish EXIT
+    validate_tree() {
+        local prefix=$1 tree=$2 entry relative
+        find "${tree}" -print0 > "${scratch}/export.list"
+        while IFS= read -r -d '' entry; do
+            relative=${prefix}${entry#"${tree}"}
+            if [[ -L ${entry} || ( ! -f ${entry} && ! -d ${entry} ) ]]; then
+                printf 'Build output is not a regular file or directory: %s\n' "${relative}" >&2
+                return 2
+            fi
+            if excluded "${relative}" || excluded "${relative}/"; then
+                printf 'Build output contains an excluded entry: %s\n' "${relative}" >&2
+                return 2
+            fi
+        done < "${scratch}/export.list"
+    }
+    validate_destination() {
+        local stage=$1 output=$2 destination=${checkout} component tracked indexed candidate
+        if [[ -e ${marker_path} || -L ${marker_path} ]]; then
+            printf 'Source has active writable execution: %s\n' "${marker_path}" >&2
+            return 125
+        fi
         IFS=/ read -r -a components <<< "${output}"
         for component in "${components[@]}"; do
             destination+=/${component}
-            if [[ -L ${destination} ]]; then printf 'Build destination is a symlink: %s\n' "${output}" >&2; exit 2; fi
+            if [[ -L ${destination} ]]; then printf 'Build destination is a symlink: %s\n' "${output}" >&2; return 2; fi
         done
-        if [[ -e ${destination} && -n $(find "${destination}" -type l -print -quit) ]]; then
-            printf 'Build destination contains a symlink: %s\n' "${output}" >&2
-            exit 2
+        indexed=$("${git_metadata[@]}" --literal-pathspecs -C "${checkout}" ls-files -- "${output}")
+        tracked=$("${git_metadata[@]}" --literal-pathspecs -C "${checkout}" ls-tree -r --name-only HEAD -- "${output}")
+        if [[ -n ${indexed} || -n ${tracked} ]]; then
+            printf 'Build output contains tracked source: %s\n' "${output}" >&2
+            return 2
         fi
+        candidate=${output}
+        if [[ -d ${stage} ]]; then candidate+=/; fi
+        if ! "${git_metadata[@]}" -C "${checkout}" check-ignore --quiet --no-index -- "${candidate}"; then
+            printf 'Build output must be Git-ignored generated content: %s\n' "${output}" >&2
+            return 2
+        fi
+        if [[ -e ${destination} ]]; then
+            if [[ ( -d ${stage} && ! -d ${destination} ) || ( -f ${stage} && ! -f ${destination} ) ]]; then
+                printf 'Build output changes an existing path type: %s\n' "${output}" >&2
+                return 2
+            fi
+            validate_tree "${output}" "${destination}"
+        fi
+    }
+    for output in "${outputs[@]}"; do
+        while [[ ${output} == */ ]]; do output=${output%/}; done
+        stage=${scratch}/outputs/${output}
+        validate_tree "${output}" "${stage}"
+        validate_destination "${stage}" "${output}"
+        destination=${checkout}/${output}
         mkdir -p "$(dirname -- "${destination}")"
+        area=$(mktemp -d "$(dirname -- "${destination}")/.check-output.XXXXXXXX")
+        areas+=("${area}")
+        destinations+=("${destination}")
+        names+=("${output}")
+        printf 'CLEANUP (added %s): Remove after prior generated output is restored or reviewed.\n' "$(date -u +%F)" > "${area}/CLEANUP"
         if [[ -d ${stage} ]]; then
-            mkdir -p "${destination}"
-            cp -R --no-preserve=ownership "${stage}/." "${destination}/"
+            mkdir "${area}/new"
+            cp -R --no-preserve=ownership "${stage}/." "${area}/new/"
         else
-            cp --no-preserve=ownership "${stage}" "${destination}"
+            cp --no-preserve=ownership "${stage}" "${area}/new"
         fi
     done
+    for index in "${!areas[@]}"; do
+        area=${areas[${index}]}
+        destination=${destinations[${index}]}
+        output=${names[${index}]}
+        validate_destination "${area}/new" "${output}"
+        if [[ -e ${destination} ]]; then mv -T -- "${destination}" "${area}/previous"; fi
+        if ! mv -T -- "${area}/new" "${destination}"; then
+            if [[ -e ${area}/previous && ! -e ${destination} && ! -L ${destination} ]]; then
+                mv -T -- "${area}/previous" "${destination}"
+            fi
+            exit 2
+        fi
+        if [[ -e ${area}/previous ]]; then
+            validate_tree "${output}" "${area}/previous"
+            find "${area}/previous" -depth -delete
+        fi
+    done
+)
+if [[ ${export_requested} == 1 ]]; then
+    mkdir "${scratch}/outputs"
+    tar --extract --file "${scratch}/artifacts.tar" --directory "${scratch}/outputs" --no-same-owner
+    publish_outputs
 fi
