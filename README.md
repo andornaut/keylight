@@ -89,12 +89,13 @@ and scratch storage.
 
 ```bash
 make check
-make lint
-make build
+poetry run ruff check .
+poetry run ruff format --check .
+poetry build
 ```
 
 The full gate runs Ruff, Markdown lint and distribution packaging. No test suite
-is declared. `make build` exports the wheel and source archive under `dist/`.
+is declared. Native Poetry commands run on the host; `poetry build` writes distributions under `dist/`.
 
 ## Publishing
 

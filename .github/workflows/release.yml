@@ -91,19 +91,35 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Docker
-        uses: docker/setup-docker-action@v5.7.0
-        with:
-          version: v29.9.3
-
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v4.4.1
-        with:
-          version: v0.38.2
-          driver: docker
-
       - name: Build the distribution
-        run: make build
+        run: |
+          set -eu
+          scratch=$(mktemp -d)
+          image="python:$(cat .python-version)"
+          docker run --rm -i --platform linux/amd64 --read-only \
+            --user "$(id -u):$(id -g)" --cap-drop ALL \
+            --security-opt no-new-privileges --cpus 4 --memory 4g --pids-limit 512 \
+            --mount "type=bind,src=$PWD,dst=/project,readonly" \
+            --mount "type=bind,src=$scratch,dst=/scratch" \
+            -e HOME=/scratch/home -e TMPDIR=/scratch/tmp \
+            -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPYCACHEPREFIX=/scratch/pycache \
+            "$image" sh -se <<'CONTAINER'
+          mkdir -p /scratch/home /scratch/tmp /scratch/work
+          test "$(uname -m)" = x86_64
+          cp -R /project/keylight /scratch/work/
+          cp /project/pyproject.toml /project/poetry.lock /project/README.md /project/LICENSE /scratch/work/
+          cd /scratch/work
+          python -m venv /scratch/venv
+          . /scratch/venv/bin/activate
+          python --version
+          export POETRY_VIRTUALENVS_CREATE=false
+          python -m pip install --disable-pip-version-check poetry==2.5.1
+          poetry --version
+          poetry install --no-root
+          poetry build
+          CONTAINER
+          mkdir -p dist
+          cp "$scratch/work/dist/"* dist/
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7.0.2

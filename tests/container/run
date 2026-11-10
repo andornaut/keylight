@@ -15,13 +15,6 @@ for task in "${tasks[@]}"; do
     if [[ -n ${declared[${task}]:-} ]]; then printf 'Duplicate check category: %s\n' "${task}" >&2; exit 2; fi
     declared[${task}]=1
 done
-if [[ ${action} == info ]]; then
-    printf '{"version":1,"checks":['
-    separator=
-    for task in "${tasks[@]}"; do printf '%s"%s"' "${separator}" "${task}"; separator=,; done
-    printf ']}\n'
-    exit 0
-fi
 case "${action}" in
     check|exec|command) ;;
     lint|test|build)
