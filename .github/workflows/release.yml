@@ -91,21 +91,13 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python
-        uses: actions/setup-python@v7.1.0
+      - name: Set up Docker
+        uses: docker/setup-docker-action@v5.7.0
         with:
-          python-version-file: .python-version
+          version: v29.9.3
 
-      # Pinned rather than installed by name: this is the tool that builds what
-      # ships, so a poetry release must not change the archives a tag produces
-      # without a commit saying so.
-      - name: Install poetry
-        run: pip install poetry==2.5.1
-
-      # The sdist and the wheel, the same pair the publish job uploads to PyPI,
-      # so what a release holds is what an install resolves to.
       - name: Build the distribution
-        run: poetry build
+        run: make build
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7.0.2

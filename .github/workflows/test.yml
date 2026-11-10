@@ -43,41 +43,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7.0.1
         with:
-          # Nothing in this job uses the token, so it is not left
-          # in .git/config for a later step to read.
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v7.1.0
+      - name: Set up Docker
+        uses: docker/setup-docker-action@v5.7.0
         with:
-          python-version-file: .python-version
+          version: v29.9.3
 
-      # Bootstrap only. Nothing linted comes from this pin, so a poetry release
-      # cannot change what the checks below reject.
-      - name: Install poetry
-        run: pip install poetry==2.5.1
-
-      # Resolved from poetry.lock rather than installed by name, so the ruff
-      # this runs is the one pyproject.toml declares and Dependabot bumps.
-      # --no-root because linting reads the sources in place and does not need
-      # the project installed.
-      - name: Install dependencies
-        run: poetry install --only dev --no-root
-
-      - name: Run ruff check
-        run: poetry run ruff check .
-
-      - name: Run ruff format check
-        run: poetry run ruff format --check .
-
-      # The action bundles markdownlint-cli2, so its own tag is the tool pin and
-      # Dependabot proposes the bump through the github-actions ecosystem. It
-      # fetches nothing at run time, so a slow host cannot turn this red.
-      - name: Run markdownlint
-        uses: DavidAnson/markdownlint-cli2-action@v25.0.0
-        with:
-          # Empty on purpose. The action defaults this to `*.{md,markdown}`,
-          # which is the repository root only, and anything passed here outranks
-          # the `globs` in .markdownlint-cli2.yaml. Empty leaves the config file
-          # deciding, so this gate and a local `markdownlint-cli2` read one list.
-          globs: ""
+      - name: Run lint
+        run: make lint
