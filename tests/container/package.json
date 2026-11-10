@@ -3,5 +3,11 @@
   "private": true,
   "dependencies": {
     "markdownlint-cli2": "0.24.0"
+  },
+  "overrides": {
+    "markdownlint-cli2@0.24.0": {
+      "markdownlint": "0.42.1",
+      "katex": "0.19.1"
+    }
   }
 }
