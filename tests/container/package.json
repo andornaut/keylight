@@ -1,0 +1,7 @@
+{
+  "name": "project-check-tools",
+  "private": true,
+  "dependencies": {
+    "markdownlint-cli2": "0.24.0"
+  }
+}

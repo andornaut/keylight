@@ -83,23 +83,18 @@ alias ktoggle='keylight --power toggle'
 
 ## Developing
 
-`keylight` uses [Poetry](https://python-poetry.org/) for dependency management and packaging.
+Make and Docker run the project-owned checks in `tests/container/`. Verification
+mounts only a read-only source snapshot and scratch storage.
 
 ```bash
-# Enter the virtual environment. Poetry 2, which CI pins, has no `shell`
-# command: `env activate` prints the activation command rather than running it.
-eval $(poetry env activate)
-
-# Run the CLI during development
-poetry run keylight --help
-
-# Lint and format
-poetry run ruff check .
-poetry run ruff format --check .
-
-# Build the sdist and wheel, as the Release workflow does
-poetry build
+make check
+make lint
+make build
+make check-info
 ```
+
+The full gate runs Ruff, Markdown lint and distribution packaging. No test suite
+is declared. `make build` exports the wheel and source archive under `dist/`.
 
 ## Publishing
 

@@ -1,0 +1,46 @@
+#!/bin/sh
+set -eu
+
+category=${1:-check}
+[ "$#" -eq 0 ] || shift
+case "$category" in
+    check)
+        for task in ${CHECK_TASKS:?CHECK_TASKS is required}; do
+            "$0" "$task"
+        done
+        ;;
+    lint)
+        ruff check .
+        ruff format --check .
+        markdownlint-cli2
+        ;;
+    build)
+        exec poetry build
+        ;;
+    exec)
+        if [ -d /opt/venv ]; then
+            cp -R --no-preserve=ownership /opt/venv /scratch/venv
+            python - <<'PYENV'
+from pathlib import Path
+for path in Path("/scratch/venv/bin").iterdir():
+    if path.is_file() and not path.is_symlink():
+        with path.open("rb") as source:
+            first = source.readline(256)
+        if first.startswith(b"#!/opt/venv/bin/python"):
+            data = path.read_bytes().replace(b"#!/opt/venv/bin/python", b"#!/scratch/venv/bin/python", 1)
+            path.write_bytes(data)
+PYENV
+        else
+            python -m venv /scratch/venv
+        fi
+        export VIRTUAL_ENV=/scratch/venv PATH=/scratch/venv/bin:$PATH
+        if [ "$#" -gt 0 ]; then
+            exec "$@"
+        fi
+        exec sh -ec "${COMMAND:?COMMAND is required}"
+        ;;
+    *)
+        printf 'No %s check declared\n' "$category" >&2
+        exit 2
+        ;;
+esac

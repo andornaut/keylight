@@ -55,7 +55,7 @@ jobs:
       # Bootstrap only. Nothing linted comes from this pin, so a poetry release
       # cannot change what the checks below reject.
       - name: Install poetry
-        run: pip install poetry==2.4.1
+        run: pip install poetry==2.5.1
 
       # Resolved from poetry.lock rather than installed by name, so the ruff
       # this runs is the one pyproject.toml declares and Dependabot bumps.

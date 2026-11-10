@@ -1,0 +1,245 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+checkout=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
+action=${1:-check}
+if (( $# )); then shift; fi
+read -r -a tasks <<< "${CHECK_TASKS:-}"
+if (( ${#tasks[@]} == 0 )) && [[ ${action} != exec && ${action} != command ]]; then
+    printf '%s\n' 'CHECK_TASKS must declare at least one of lint, test or build.' >&2
+    exit 2
+fi
+declare -A declared=()
+for task in "${tasks[@]}"; do
+    case "${task}" in lint|test|build) ;; *) printf 'Invalid check category: %s\n' "${task}" >&2; exit 2 ;; esac
+    if [[ -n ${declared[${task}]:-} ]]; then printf 'Duplicate check category: %s\n' "${task}" >&2; exit 2; fi
+    declared[${task}]=1
+done
+if [[ ${action} == info ]]; then
+    printf '{"version":1,"checks":['
+    separator=
+    for task in "${tasks[@]}"; do printf '%s"%s"' "${separator}" "${task}"; separator=,; done
+    printf ']}\n'
+    exit 0
+fi
+case "${action}" in
+    check|exec|command) ;;
+    lint|test|build)
+        if [[ -z ${declared[${action}]:-} ]]; then printf 'This project does not declare a %s check.\n' "${action}" >&2; exit 2; fi
+        ;;
+    *) printf 'Unknown check action: %s\n' "${action}" >&2; exit 2 ;;
+esac
+limit=${CHECK_TIMEOUT_SECONDS:-900}
+if [[ ! ${limit} =~ ^[1-9][0-9]*$ ]]; then printf '%s\n' 'CHECK_TIMEOUT_SECONDS must be a positive integer.' >&2; exit 2; fi
+scratch_size=${CHECK_SCRATCH_SIZE:-1g}
+work_size=${CHECK_WORK_SIZE:-2g}
+tmp_size=${CHECK_TMP_SIZE:-1g}
+for size in "${scratch_size}" "${work_size}" "${tmp_size}"; do
+    if [[ ! ${size} =~ ^[1-9][0-9]*[kKmMgG]?$ ]]; then printf 'Invalid container scratch size: %s\n' "${size}" >&2; exit 2; fi
+done
+container_user=19001:19001
+if [[ ${action} == exec ]]; then
+    if [[ $(id -u) == 0 ]]; then printf '%s\n' 'Writable exec requires a non-root host user.' >&2; exit 2; fi
+    container_user=$(id -u):$(id -g)
+fi
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/project-check.XXXXXXXX")
+cidfile=${scratch}/container.id
+cleanup() {
+    result=$?
+    trap - EXIT INT TERM HUP
+    if [[ -s ${cidfile} ]]; then docker rm --force "$(cat "${cidfile}")" >/dev/null 2>&1 || true; fi
+    find "${scratch}" -depth -delete
+    exit "${result}"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+excluded() {
+    case "${1,,}" in
+        /*|..|../*|*/../*|*/..|.git|.git/*|*/.git|*/.git/*) return 0 ;;
+        agents.md|*/agents.md|claude.md|*/claude.md|claude.local.md|*/claude.local.md|gemini.md|*/gemini.md) return 0 ;;
+        .env|.env.*|*/.env|*/.env.*|*.env|.dev.vars|.dev.vars.*|*/.dev.vars|*/.dev.vars.*) return 0 ;;
+        .npmrc|*/.npmrc|.pypirc|*/.pypirc|.netrc|*/.netrc|.git-credentials|*/.git-credentials|.private/*|*/.private/*|.ssh/*|*/.ssh/*|.aws/*|*/.aws/*) return 0 ;;
+        credentials|credentials.*|*/credentials|*/credentials.*|*.pem|*.key|*.crt|*.cer|*.p12|*.pfx|*.age|*.gpg|*.sops.*) return 0 ;;
+    esac
+    return 1
+}
+contained() {
+    local path=$1 resolved relative
+    resolved=$(realpath -m -- "${checkout}/$(dirname -- "${path}")")
+    case "${resolved}" in
+        "${checkout}"|"${checkout}"/*) ;;
+        *) printf 'Source path escapes checkout: %s\n' "${path}" >&2; return 2 ;;
+    esac
+    if [[ ${resolved} == "${checkout}" ]]; then
+        relative=$(basename -- "${path}")
+    else
+        relative=${resolved#"${checkout}/"}/$(basename -- "${path}")
+    fi
+    if excluded "${relative}"; then printf 'Source path resolves to an excluded location: %s\n' "${path}" >&2; return 2; fi
+}
+collect_source() {
+    local root=$1 prefix=$2 path relative entries
+    entries=${scratch}/git-files-$(printf '%s' "${root}" | sha256sum | cut -c1-16)
+    git -C "${root}" ls-files --cached --others --exclude-standard -z > "${entries}"
+    while IFS= read -r -d '' path; do
+        relative=${prefix}${path}
+        if excluded "${relative}"; then continue; fi
+        contained "${relative}"
+        if [[ -d ${root}/${path} && ! -L ${root}/${path} ]]; then
+            if [[ -e ${root}/${path}/.git ]]; then collect_source "${root}/${path}" "${relative}/"; fi
+        elif [[ -e ${root}/${path} || -L ${root}/${path} ]]; then
+            printf '%s\0' "${relative}"
+        fi
+    done < "${entries}"
+}
+snapshot() {
+    local output=$1
+    collect_source "${checkout}" '' > "${scratch}/source.list"
+    tar --create --file "${output}" --directory "${checkout}" \
+        --null --verbatim-files-from --no-recursion --files-from "${scratch}/source.list"
+}
+contained tests/container/context
+if [[ -L ${checkout}/tests/container/context ]]; then printf '%s\n' 'Container context manifest must not be a symlink.' >&2; exit 2; fi
+while IFS= read -r path || [[ -n ${path} ]]; do
+    if [[ -z ${path} || ${path} == \#* ]]; then continue; fi
+    contained "${path}"
+    if excluded "${path}" || [[ ! -f ${checkout}/${path} || -L ${checkout}/${path} ]]; then
+        printf 'Invalid container context input: %s\n' "${path}" >&2
+        exit 2
+    fi
+    printf '%s\0' "${path}"
+done < "${checkout}/tests/container/context" > "${scratch}/context.list"
+tar --create --file "${scratch}/context.tar" --directory "${checkout}" \
+    --null --verbatim-files-from --no-recursion --files-from "${scratch}/context.list"
+revision=$(git -C "${checkout}" rev-parse HEAD)
+source_dirty=false
+if [[ -n $(git -C "${checkout}" status --porcelain=v1 --untracked-files=all) ]]; then source_dirty=true; fi
+source_hash=
+if [[ ${action} != exec ]]; then
+    snapshot "${scratch}/source.tar"
+    source_hash=$(sha256sum "${scratch}/source.tar" | cut -d ' ' -f1)
+    before=$(git -C "${checkout}" status --porcelain=v1 --untracked-files=all; printf '%s\n%s\n' "${revision}" "${source_hash}")
+fi
+image=${CONTAINER_IMAGE:-local-check:$(printf '%s' "${checkout}" | sha256sum | cut -c1-16)}
+read -r -a build_values <<< "${CONTAINER_BUILD_ARGS:-}"
+build_args=()
+for value in "${build_values[@]}"; do
+    if [[ ! ${value} =~ ^[A-Za-z_][A-Za-z0-9_]*=.+$ ]]; then printf 'Invalid container build argument: %s\n' "${value}" >&2; exit 2; fi
+    build_args+=(--build-arg "${value}")
+done
+timeout --signal=TERM --kill-after=10 "${limit}" \
+    docker build --tag "${image}" --iidfile "${scratch}/image.id" --file tests/container/Dockerfile "${build_args[@]}" - \
+    < "${scratch}/context.tar" >&2
+image=$(cat "${scratch}/image.id")
+read -r -a outputs <<< "${BUILD_OUTPUTS:-}"
+for output in "${outputs[@]}"; do
+    if excluded "${output}"; then printf 'Invalid build output path: %s\n' "${output}" >&2; exit 2; fi
+    IFS=/ read -r -a components <<< "${output}"
+    for component in "${components[@]}"; do
+        if [[ -z ${component} || ${component} == . || ${component} == .. ]]; then printf 'Invalid build output path: %s\n' "${output}" >&2; exit 2; fi
+    done
+done
+run_category() {
+    local category=$1 network=none status dispatcher=${1}
+    shift
+    if [[ ${category} == exec ]]; then network=bridge; fi
+    if [[ ${category} == lint ]]; then network=${CHECK_NETWORK_LINT:-none}; fi
+    case "${network}" in none|bridge) ;; *) printf 'Unsupported check network: %s\n' "${network}" >&2; return 2 ;; esac
+    mounts=()
+    if [[ ${category} == exec ]]; then
+        mounts+=(--mount "type=bind,source=${checkout},target=/work")
+        if [[ -d ${checkout}/.git ]]; then
+            mounts+=(--tmpfs '/work/.git:ro,nosuid,noexec,size=4k,mode=0555')
+        elif [[ -e ${checkout}/.git ]]; then
+            : > "${scratch}/git-mask"
+            mounts+=(--mount "type=bind,source=${scratch}/git-mask,target=/work/.git,readonly")
+        fi
+    else
+        mounts+=(--mount "type=bind,source=${scratch}/source.tar,target=/source.tar,readonly" --tmpfs "/work:rw,exec,nosuid,size=${work_size},mode=1777")
+    fi
+    if [[ ${category} == command ]]; then dispatcher='exec'; fi
+    set +e
+    # The quoted shell program is evaluated only inside the container.
+    # shellcheck disable=SC2016
+    timeout --signal=TERM --kill-after=10 "${limit}" docker run \
+        --cidfile "${cidfile}" --user "${container_user}" \
+        --group-add "$(stat -c %g "${checkout}")" \
+        --read-only --cap-drop ALL --security-opt no-new-privileges \
+        --pids-limit 512 --network "${network}" \
+        "${mounts[@]}" --tmpfs "/scratch:rw,exec,nosuid,size=${scratch_size},mode=1777" \
+        --tmpfs "/tmp:rw,exec,nosuid,size=${tmp_size},mode=1777" \
+        --env HOME=/scratch/home --env TMPDIR=/scratch \
+        --env PYTHONPYCACHEPREFIX=/scratch/pycache --env RUFF_CACHE_DIR=/scratch/ruff \
+        --env "CHECK_TASKS=${CHECK_TASKS:-}" --env "COMMAND=${COMMAND:-}" \
+        --env "CHECK_REVISION=${revision}" --env "CHECK_SOURCE_SHA256=${source_hash}" --env "CHECK_SOURCE_DIRTY=${source_dirty}" \
+        --env "BUILD_OUTPUTS=${BUILD_OUTPUTS:-}" --env "CHECK_EXPORT=$([[ ${action} == build ]] && printf 1 || printf 0)" \
+        --env "CHECK_WRITABLE=$([[ ${category} == exec ]] && printf 1 || printf 0)" \
+        --entrypoint /bin/sh "${image}" -ec '
+            mkdir -p /scratch/home
+            if [ "$CHECK_WRITABLE" = 0 ]; then tar --extract --file /source.tar --directory /work --no-same-owner; fi
+            cd /work
+            if [ "$CHECK_WRITABLE" = 1 ]; then export HUSKY=0; fi
+            if [ "$CHECK_EXPORT" = 1 ]; then
+                /opt/check/run "$@" >&2
+                set -- $BUILD_OUTPUTS
+                for output in "$@"; do
+                    case "$(realpath -e "$output")" in /work/*) ;; *) printf "Build output escapes work directory: %s\n" "$output" >&2; exit 2 ;; esac
+                    if [ -n "$(find "$output" ! -type f ! -type d -print -quit)" ]; then
+                        printf "Build output is not a regular file or directory: %s\n" "$output" >&2
+                        exit 2
+                    fi
+                done
+                if [ "$#" = 0 ]; then tar --create --file - --files-from /dev/null; else tar --create --file - -- "$@"; fi
+            else
+                exec /opt/check/run "$@"
+            fi
+        ' sh "${dispatcher}" "$@"
+    status=$?
+    set -e
+    return "${status}"
+}
+if [[ ${action} == check ]]; then
+    for task in "${tasks[@]}"; do
+        run_category "${task}"
+        docker rm "$(cat "${cidfile}")" >/dev/null
+        unlink "${cidfile}"
+    done
+elif [[ ${action} == build ]]; then
+    run_category build "$@" > "${scratch}/artifacts.tar"
+else
+    focused=()
+    if [[ ${action} == test && -n ${TEST_ARGS:-} ]]; then read -r -a focused <<< "${TEST_ARGS}"; fi
+    run_category "${action}" "${focused[@]}" "$@"
+fi
+if [[ ${action} != exec ]]; then
+    snapshot "${scratch}/after.tar"
+    after=$(git -C "${checkout}" status --porcelain=v1 --untracked-files=all; git -C "${checkout}" rev-parse HEAD; sha256sum "${scratch}/after.tar" | cut -d ' ' -f1)
+    if [[ ${before} != "${after}" ]]; then printf '%s\n' 'Discarding check result: source changed during verification.' >&2; exit 125; fi
+fi
+if [[ ${action} == build ]]; then
+    mkdir "${scratch}/outputs"
+    tar --extract --file "${scratch}/artifacts.tar" --directory "${scratch}/outputs" --no-same-owner
+    for output in "${outputs[@]}"; do
+        stage=${scratch}/outputs/${output}
+        destination=${checkout}
+        IFS=/ read -r -a components <<< "${output}"
+        for component in "${components[@]}"; do
+            destination+=/${component}
+            if [[ -L ${destination} ]]; then printf 'Build destination is a symlink: %s\n' "${output}" >&2; exit 2; fi
+        done
+        if [[ -e ${destination} && -n $(find "${destination}" -type l -print -quit) ]]; then
+            printf 'Build destination contains a symlink: %s\n' "${output}" >&2
+            exit 2
+        fi
+        mkdir -p "$(dirname -- "${destination}")"
+        if [[ -d ${stage} ]]; then
+            mkdir -p "${destination}"
+            cp -R --no-preserve=ownership "${stage}/." "${destination}/"
+        else
+            cp --no-preserve=ownership "${stage}" "${destination}"
+        fi
+    done
+fi

@@ -100,7 +100,7 @@ jobs:
       # ships, so a poetry release must not change the archives a tag produces
       # without a commit saying so.
       - name: Install poetry
-        run: pip install poetry==2.4.1
+        run: pip install poetry==2.5.1
 
       # The sdist and the wheel, the same pair the publish job uploads to PyPI,
       # so what a release holds is what an install resolves to.
