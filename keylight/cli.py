@@ -28,7 +28,11 @@ def normalize(name: str, value: str | None, min_number: int, max_number: int) ->
             number = min_number
     elif number > max_number:
         if direction is types.Operation.DECREMENT:
-            print(f"{name}={value} is below the minimum. Setting {name}={min_number}.", file=sys.stderr)
+            # A decrement bigger than the whole range always bottoms out at
+            # the minimum; name the decrement rather than reporting the input
+            # as "below the minimum" (that text belongs to clamping a small
+            # SET value).
+            print(f"{name}={value} decrements past the minimum. Setting {name}={min_number}.", file=sys.stderr)
             number = min_number
             direction = types.Operation.SET
         else:
