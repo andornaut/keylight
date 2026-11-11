@@ -61,7 +61,6 @@ jobs:
           export POETRY_VIRTUALENVS_CREATE=false
           for script in tests/container/stock tests/container/check-stock; do bash -n "$script"; done
           for script in tests/container/python tests/container/markdown; do sh -n "$script"; done
-          bash
           ruff check .
           ruff format --check .
           '

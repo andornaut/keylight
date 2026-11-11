@@ -13,7 +13,6 @@ python -m pip install --disable-pip-version-check poetry==2.5.1 >&2
 export POETRY_VIRTUALENVS_CREATE=false
 poetry install --no-root >&2
 if [ "$action" = check ] || [ "$action" = lint ]; then
-    bash
     ruff check .
     ruff format --check .
 fi
