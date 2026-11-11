@@ -52,7 +52,7 @@ jobs:
           source tests/container/stock
           stock_begin "$PWD"
           STOCK_OUTPUT_DIR=
-          stock_image native_image "python:$(cat .python-version)"
+          native_image="python:$(cat .python-version)"
           STOCK_NETWORK=bridge stock_run "${native_image}" -- sh -ec 'python -m venv /scratch/venv >&2
           /scratch/venv/bin/python -m pip install --disable-pip-version-check poetry==2.5.1 >&2
           export VIRTUAL_ENV=/scratch/venv PATH="/scratch/venv/bin:$PATH" POETRY_VIRTUALENVS_CREATE=false
@@ -74,7 +74,7 @@ jobs:
           source tests/container/stock
           stock_begin "$PWD"
           STOCK_OUTPUT_DIR=
-          stock_image markdown_image node:24.22.2
+          markdown_image=node:24.22.2
           STOCK_NETWORK=bridge stock_run "${markdown_image}" -- sh -ec 'mkdir -p /scratch/markdown
           cp tests/container/package.json tests/container/package-lock.json /scratch/markdown/
           npm ci --prefix /scratch/markdown --ignore-scripts --no-audit --no-fund --maxsockets=1 >&2
@@ -89,6 +89,6 @@ jobs:
           source tests/container/stock
           stock_begin "$PWD"
           STOCK_OUTPUT_DIR=
-          stock_image shellcheck_image koalaman/shellcheck:v0.11.0
+          shellcheck_image=koalaman/shellcheck:v0.11.0
           stock_readonly "${shellcheck_image}" /bin/shellcheck -x -P SCRIPTDIR tests/container/stock tests/container/check-stock tests/container/python tests/container/markdown
           stock_finish

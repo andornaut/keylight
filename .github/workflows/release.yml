@@ -98,7 +98,7 @@ jobs:
           source tests/container/stock
           stock_begin "$PWD"
           STOCK_OUTPUT_DIR=
-          stock_image native_image "python:$(cat .python-version)"
+          native_image="python:$(cat .python-version)"
           build_output=${scratch}/build-output
           mkdir "${build_output}"
           STOCK_OUTPUT_DIR=${build_output} STOCK_NETWORK=bridge stock_run "${native_image}" -- sh -ec 'python -m venv /scratch/venv >&2
