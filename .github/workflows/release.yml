@@ -95,12 +95,15 @@ jobs:
         run: |
           set -eu
           scratch=$(mktemp -d)
+          SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
+          export SOURCE_DATE_EPOCH
           image="python:$(cat .python-version)"
           docker run --rm -i --platform linux/amd64 --read-only \
             --user "$(id -u):$(id -g)" --cap-drop ALL \
             --security-opt no-new-privileges --cpus 4 --memory 4g --pids-limit 512 \
             --mount "type=bind,src=$PWD,dst=/project,readonly" \
             --mount "type=bind,src=$scratch,dst=/scratch" \
+            -e SOURCE_DATE_EPOCH \
             -e HOME=/scratch/home -e TMPDIR=/scratch/tmp \
             -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPYCACHEPREFIX=/scratch/pycache \
             "$image" sh -se <<'CONTAINER'

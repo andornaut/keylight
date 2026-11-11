@@ -45,16 +45,72 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Docker
-        uses: docker/setup-docker-action@v5.7.0
-        with:
-          version: v29.9.3
+      - name: Run native lint
+        run: |
+          set -eu
+          scratch=$(mktemp -d)
+          SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
+          export SOURCE_DATE_EPOCH
+          image="python:$(cat .python-version)"
+          docker run --rm -i --platform linux/amd64 --read-only \
+            --user "$(id -u):$(id -g)" --cap-drop ALL \
+            --security-opt no-new-privileges --cpus 4 --memory 4g --pids-limit 512 \
+            --mount "type=bind,src=$PWD,dst=/project,readonly" \
+            --mount "type=bind,src=$scratch,dst=/scratch" \
+            -e SOURCE_DATE_EPOCH \
+            -e HOME=/scratch/home -e TMPDIR=/scratch/tmp \
+            -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPYCACHEPREFIX=/scratch/pycache \
+            -e RUFF_CACHE_DIR=/scratch/ruff \
+            "$image" sh -se <<'CONTAINER'
+          mkdir -p /scratch/home /scratch/tmp
+          cd /project
+          python -m venv /scratch/venv
+          . /scratch/venv/bin/activate
+          export POETRY_VIRTUALENVS_CREATE=false
+          python -m pip install --disable-pip-version-check poetry==2.5.1
+          poetry install --no-root
+          poetry run ruff check .
+          poetry run ruff format --check .
+          CONTAINER
 
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v4.4.1
-        with:
-          version: v0.38.2
-          driver: docker
+      - name: Lint Markdown
+        run: |
+          set -eu
+          scratch=$(mktemp -d)
+          SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
+          export SOURCE_DATE_EPOCH
+          image="node:24.22.2"
+          docker run --rm -i --platform linux/amd64 --read-only \
+            --user "$(id -u):$(id -g)" --cap-drop ALL \
+            --security-opt no-new-privileges --cpus 4 --memory 4g --pids-limit 512 \
+            --mount "type=bind,src=$PWD,dst=/project,readonly" \
+            --mount "type=bind,src=$scratch,dst=/scratch" \
+            -e SOURCE_DATE_EPOCH \
+            -e HOME=/scratch/home -e TMPDIR=/scratch/tmp \
+            -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPYCACHEPREFIX=/scratch/pycache \
+            -e RUFF_CACHE_DIR=/scratch/ruff \
+            "$image" sh -se <<'CONTAINER'
+          mkdir -p /scratch/home /scratch/tmp
+          cd /project
+          mkdir -p /scratch/tools
+          cp /project/tests/container/package.json /project/tests/container/package-lock.json /scratch/tools/
+          cd /scratch/tools
+          npm ci --ignore-scripts --no-audit --no-fund
+          cd /project
+          node /scratch/tools/node_modules/markdownlint-cli2/markdownlint-cli2-bin.mjs
+          CONTAINER
 
-      - name: Run lint
-        run: make lint
+      - name: Lint shell scripts
+        run: |
+          set -eu
+          scratch=$(mktemp -d)
+          SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
+          export SOURCE_DATE_EPOCH
+          docker run --rm --platform linux/amd64 --read-only \
+            --user "$(id -u):$(id -g)" --cap-drop ALL \
+            --security-opt no-new-privileges --cpus 4 --memory 4g --pids-limit 512 \
+            --mount "type=bind,src=$PWD,dst=/project,readonly" \
+            --mount "type=bind,src=$scratch,dst=/scratch" \
+            -e SOURCE_DATE_EPOCH \
+            --workdir /project koalaman/shellcheck:v0.11.0 \
+            -x -P SCRIPTDIR tests/container/run tests/container/check
