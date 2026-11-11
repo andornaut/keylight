@@ -14,7 +14,7 @@ case "$1" in
         ;;
     lint)
         for script in tests/container/stock tests/container/check-stock; do bash -n "$script"; done
-        for script in tests/container/check tests/container/python tests/container/markdown; do sh -n "$script"; done
+        for script in tests/container/python tests/container/markdown; do sh -n "$script"; done
         ruff check .
         ruff format --check .
         ;;

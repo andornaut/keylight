@@ -72,7 +72,7 @@ jobs:
           stock_run "${native_image}" native -- sh -ec 'export VIRTUAL_ENV=/scratch/venv PATH="/scratch/venv/bin:$PATH"
           export POETRY_VIRTUALENVS_CREATE=false
           for script in tests/container/stock tests/container/check-stock; do bash -n "$script"; done
-          for script in tests/container/check tests/container/python tests/container/markdown; do sh -n "$script"; done
+          for script in tests/container/python tests/container/markdown; do sh -n "$script"; done
           ruff check .
           ruff format --check .
           '
@@ -122,5 +122,5 @@ jobs:
             exit 125
           fi
           stock_image shellcheck_image koalaman/shellcheck:v0.11.0
-          stock_readonly "${shellcheck_image}" /bin/shellcheck -x -P SCRIPTDIR tests/container/check tests/container/stock tests/container/check-stock tests/container/python tests/container/markdown
+          stock_readonly "${shellcheck_image}" /bin/shellcheck -x -P SCRIPTDIR tests/container/stock tests/container/check-stock tests/container/python tests/container/markdown
           stock_finish
