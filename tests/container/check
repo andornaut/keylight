@@ -10,7 +10,7 @@ case "$category" in
         done
         ;;
     lint)
-        shellcheck -x -P SCRIPTDIR tests/container/run tests/container/check
+        shellcheck -x -P SCRIPTDIR tests/container/check
         ruff check .
         ruff format --check .
         markdownlint-cli2

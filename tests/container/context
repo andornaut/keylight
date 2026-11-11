@@ -1,6 +1,0 @@
-tests/container/Dockerfile
-tests/container/check
-tests/container/package.json
-tests/container/package-lock.json
-pyproject.toml
-poetry.lock

@@ -13,7 +13,7 @@ case "$1" in
         for task in lint build; do sh "$0" "$task"; done
         ;;
     lint)
-        for script in tests/container/run tests/container/stock tests/container/check-stock; do bash -n "$script"; done
+        for script in tests/container/stock tests/container/check-stock; do bash -n "$script"; done
         for script in tests/container/check tests/container/python tests/container/markdown; do sh -n "$script"; done
         ruff check .
         ruff format --check .
