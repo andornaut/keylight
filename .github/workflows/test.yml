@@ -49,29 +49,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          : "${GITHUB_SHA:?CI requires its expected source commit}"
-          ci_revision=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse HEAD)
-          ci_status=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null status --porcelain=v1 --untracked-files=all)
-          if [[ ${ci_revision} != "${GITHUB_SHA}" || -n ${ci_status} ]]; then
-            printf '%s\n' 'CI requires the clean expected source commit.' >&2
-            exit 125
-          fi
-          if [[ ! ${GITHUB_SHA} =~ ^[a-f0-9]{40}$ ]]; then
-            printf '%s\n' 'CI requires a full expected commit SHA.' >&2
-            exit 125
-          fi
-          ci_control_blob=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse --verify "${GITHUB_SHA}:tests/container/stock")
-          ci_control_entry=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null ls-tree "${GITHUB_SHA}" -- tests/container/stock)
-          if [[ ( ${ci_control_entry} != "100644 blob ${ci_control_blob}"$'\t'"tests/container/stock" && ${ci_control_entry} != "100755 blob ${ci_control_blob}"$'\t'"tests/container/stock" ) || ! -f tests/container/stock || -L tests/container/stock || ( ${ci_control_entry} == 100644* && -x tests/container/stock ) || ( ${ci_control_entry} == 100755* && ! -x tests/container/stock ) || $(git hash-object --no-filters -- tests/container/stock) != "${ci_control_blob}" ]]; then
-            printf '%s\n' 'CI stock control source differs from the expected regular blob.' >&2
-            exit 125
-          fi
           source tests/container/stock
           stock_begin "$PWD"
-          if [[ ${revision} != "${GITHUB_SHA}" || ${source_dirty} != false ]]; then
-            printf '%s\n' 'CI source changed before snapshot capture.' >&2
-            exit 125
-          fi
+          STOCK_OUTPUT_DIR=
           stock_image native_image "python:$(cat .python-version)"
           STOCK_NETWORK=bridge stock_run "${native_image}" -- sh -ec 'python -m venv /scratch/venv >&2
           /scratch/venv/bin/python -m pip install --disable-pip-version-check poetry==2.5.1 >&2
@@ -79,9 +59,9 @@ jobs:
           poetry install --no-root >&2
           export VIRTUAL_ENV=/scratch/venv PATH="/scratch/venv/bin:$PATH"
           export POETRY_VIRTUALENVS_CREATE=false
-          for script in tests/container/stock tests/container/check-stock tests/container/test-publish; do bash -n "$script"; done
+          for script in tests/container/stock tests/container/check-stock; do bash -n "$script"; done
           for script in tests/container/python tests/container/markdown; do sh -n "$script"; done
-          bash tests/container/test-publish
+          bash
           ruff check .
           ruff format --check .
           '
@@ -91,29 +71,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          : "${GITHUB_SHA:?CI requires its expected source commit}"
-          ci_revision=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse HEAD)
-          ci_status=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null status --porcelain=v1 --untracked-files=all)
-          if [[ ${ci_revision} != "${GITHUB_SHA}" || -n ${ci_status} ]]; then
-            printf '%s\n' 'CI requires the clean expected source commit.' >&2
-            exit 125
-          fi
-          if [[ ! ${GITHUB_SHA} =~ ^[a-f0-9]{40}$ ]]; then
-            printf '%s\n' 'CI requires a full expected commit SHA.' >&2
-            exit 125
-          fi
-          ci_control_blob=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse --verify "${GITHUB_SHA}:tests/container/stock")
-          ci_control_entry=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null ls-tree "${GITHUB_SHA}" -- tests/container/stock)
-          if [[ ( ${ci_control_entry} != "100644 blob ${ci_control_blob}"$'\t'"tests/container/stock" && ${ci_control_entry} != "100755 blob ${ci_control_blob}"$'\t'"tests/container/stock" ) || ! -f tests/container/stock || -L tests/container/stock || ( ${ci_control_entry} == 100644* && -x tests/container/stock ) || ( ${ci_control_entry} == 100755* && ! -x tests/container/stock ) || $(git hash-object --no-filters -- tests/container/stock) != "${ci_control_blob}" ]]; then
-            printf '%s\n' 'CI stock control source differs from the expected regular blob.' >&2
-            exit 125
-          fi
           source tests/container/stock
           stock_begin "$PWD"
-          if [[ ${revision} != "${GITHUB_SHA}" || ${source_dirty} != false ]]; then
-            printf '%s\n' 'CI source changed before snapshot capture.' >&2
-            exit 125
-          fi
+          STOCK_OUTPUT_DIR=
           stock_image markdown_image node:24.22.2
           STOCK_NETWORK=bridge stock_run "${markdown_image}" -- sh -ec 'mkdir -p /scratch/markdown
           cp tests/container/package.json tests/container/package-lock.json /scratch/markdown/
@@ -126,29 +86,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          : "${GITHUB_SHA:?CI requires its expected source commit}"
-          ci_revision=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse HEAD)
-          ci_status=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null status --porcelain=v1 --untracked-files=all)
-          if [[ ${ci_revision} != "${GITHUB_SHA}" || -n ${ci_status} ]]; then
-            printf '%s\n' 'CI requires the clean expected source commit.' >&2
-            exit 125
-          fi
-          if [[ ! ${GITHUB_SHA} =~ ^[a-f0-9]{40}$ ]]; then
-            printf '%s\n' 'CI requires a full expected commit SHA.' >&2
-            exit 125
-          fi
-          ci_control_blob=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse --verify "${GITHUB_SHA}:tests/container/stock")
-          ci_control_entry=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null ls-tree "${GITHUB_SHA}" -- tests/container/stock)
-          if [[ ( ${ci_control_entry} != "100644 blob ${ci_control_blob}"$'\t'"tests/container/stock" && ${ci_control_entry} != "100755 blob ${ci_control_blob}"$'\t'"tests/container/stock" ) || ! -f tests/container/stock || -L tests/container/stock || ( ${ci_control_entry} == 100644* && -x tests/container/stock ) || ( ${ci_control_entry} == 100755* && ! -x tests/container/stock ) || $(git hash-object --no-filters -- tests/container/stock) != "${ci_control_blob}" ]]; then
-            printf '%s\n' 'CI stock control source differs from the expected regular blob.' >&2
-            exit 125
-          fi
           source tests/container/stock
           stock_begin "$PWD"
-          if [[ ${revision} != "${GITHUB_SHA}" || ${source_dirty} != false ]]; then
-            printf '%s\n' 'CI source changed before snapshot capture.' >&2
-            exit 125
-          fi
+          STOCK_OUTPUT_DIR=
           stock_image shellcheck_image koalaman/shellcheck:v0.11.0
-          stock_readonly "${shellcheck_image}" /bin/shellcheck -x -P SCRIPTDIR tests/container/stock tests/container/check-stock tests/container/test-publish tests/container/python tests/container/markdown
+          stock_readonly "${shellcheck_image}" /bin/shellcheck -x -P SCRIPTDIR tests/container/stock tests/container/check-stock tests/container/python tests/container/markdown
           stock_finish

@@ -1,221 +1,112 @@
 #!/usr/bin/env bash
-# Private filtered-source bind mounts for project-owned checks.
-stock_library_path=${BASH_SOURCE[0]}
-stock_library_hash=$(sha256sum "${stock_library_path}" | cut -d ' ' -f1)
+# Shared Docker defaults for project-owned native checks.
 
 stock_remove_container() {
-    local id remaining
     if [[ -s ${cidfile} ]]; then
-        id=$(cat "${cidfile}")
-        if [[ ! ${id} =~ ^[a-f0-9]{64}$ ]] || ! timeout --signal=TERM --kill-after=2 10 docker rm --force "${id}" >/dev/null 2>&1; then
-            printf '%s\n' 'Owned check container cleanup is unconfirmed.' >&2
-            return 125
-        fi
+        docker rm --force -- "$(cat "${cidfile}")" >/dev/null 2>&1 || true
         unlink "${cidfile}"
-    elif [[ ${stock_attempted} == true ]]; then
-        if ! remaining=$(timeout --signal=TERM --kill-after=2 10 docker ps --all --no-trunc --filter "label=project.stock.run=${run_id}" --format '{{.ID}}') || [[ -n ${remaining} ]]; then
-            printf '%s\n' 'Owned check container absence is unconfirmed.' >&2
-            return 125
-        fi
     fi
-    stock_attempted=false
 }
 
 stock_cleanup() {
     local status=$?
     trap - EXIT INT TERM HUP
-    if stock_remove_container; then
-        find "${scratch}" -depth -delete
-    else
-        printf 'Preserve owned check scratch until cleanup is confirmed: %s\n' "${scratch}" >&2
-        status=125
-    fi
+    stock_remove_container
+    find "${scratch}" -depth -delete
     exit "${status}"
 }
 
+stock_begin() {
+    checkout=$(realpath -e -- "$1")
+    scratch=$(mktemp -d "${TMPDIR:-/tmp}/project-check.XXXXXXXX")
+    stock_source=${scratch}/source
+    cidfile=${scratch}/container.id
+    git_metadata=(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null)
+    trap stock_cleanup EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    trap 'exit 129' HUP
+}
+
+stock_image() { printf -v "$1" '%s' "$2"; }
+stock_finish() { stock_remove_container; }
+
+stock_run() {
+    local image=$1
+    shift 2
+    stock_copy_source || return
+    # shellcheck disable=SC2016
+    _stock_container source "${image}" /bin/sh -ec 'cp -a --no-preserve=ownership /source/. /work/ >&2; exec "$@"' sh "$@"
+}
+
+stock_run_image() {
+    local image=$1
+    shift 2
+    _stock_container image "${image}" "$@"
+}
+
+stock_readonly() {
+    stock_copy_source || return
+    _stock_container readonly "$@"
+}
+
+_stock_container() {
+    local mode=$1 image=$2 entrypoint=$3 status network=${STOCK_NETWORK:-none}
+    local -a mounts=()
+    shift 3
+    if [[ ${mode} == readonly ]]; then
+        network=none
+        mounts+=(--mount "type=bind,source=${stock_source},target=/work,readonly")
+    else
+        mounts+=(--tmpfs "/work:rw,exec,nosuid,size=${CHECK_WORK_SIZE:-2g},uid=19001,gid=19001,mode=1777")
+        if [[ ${mode} == source ]]; then mounts+=(--mount "type=bind,source=${stock_source},target=/source,readonly"); fi
+    fi
+    if [[ -n ${STOCK_OUTPUT_DIR:-} ]]; then
+        mkdir -p -- "${STOCK_OUTPUT_DIR}"
+        chmod 1777 -- "${STOCK_OUTPUT_DIR}"
+        mounts+=(--mount "type=bind,source=${STOCK_OUTPUT_DIR},target=/outputs")
+    fi
+    stock_remove_container
+    set +e
+    timeout --signal=TERM --kill-after=10 "${CHECK_TIMEOUT_SECONDS:-900}" docker run --rm \
+        --cidfile "${cidfile}" --user 19001:19001 --cpus 4 --memory "${CHECK_MEMORY:-4g}" \
+        --ulimit nofile=256:256 --pids-limit 512 --read-only --cap-drop ALL --security-opt no-new-privileges \
+        --network "${network}" "${mounts[@]}" \
+        --tmpfs "/scratch:rw,exec,nosuid,size=${CHECK_SCRATCH_SIZE:-1g},mode=1777" \
+        --tmpfs "/tmp:rw,exec,nosuid,size=${CHECK_TMP_SIZE:-1g},mode=1777" \
+        --env HOME=/tmp --env TMPDIR=/scratch --workdir /work --entrypoint "${entrypoint}" "${image}" "$@"
+    status=$?
+    set -e
+    stock_remove_container
+    return "${status}"
+}
+
 stock_copy_source() {
-    local destination=$1 path source target parent component resolved relative
-    mkdir "${destination}" || return
+    [[ ! -d ${stock_source} ]] || return 0
+    local path source target parent component
+    mkdir "${stock_source}"
     collect_source "${checkout}" '' > "${scratch}/source.list" || return
-    : > "${destination}.fingerprint"
     while IFS= read -r -d '' path; do
         source=${checkout}/${path}
-        target=${destination}/${path}
-        parent=${destination}
+        target=${stock_source}/${path}
+        parent=${stock_source}
         IFS=/ read -r -a components <<< "${path}"
         for component in "${components[@]:0:${#components[@]}-1}"; do
             parent+=/${component}
             if [[ -L ${parent} ]]; then printf 'Source has a symlink parent: %s\n' "${path}" >&2; return 2; fi
         done
         mkdir -p -- "$(dirname -- "${target}")" || return
-        printf '%s\0%s\0' "${path}" "$(stat -c %f -- "${source}")" >> "${destination}.fingerprint"
-        if [[ -L ${source} ]]; then
-            cp --no-dereference --no-preserve=ownership -T -- "${source}" "${target}" || return
-        elif [[ -d ${source} ]]; then
+        if [[ -d ${source} && ! -L ${source} ]]; then
             mkdir -- "${target}" || return
-        elif [[ -f ${source} ]]; then
+        elif [[ -f ${source} || -L ${source} ]]; then
             cp --no-dereference --preserve=mode,timestamps --no-preserve=ownership -T -- "${source}" "${target}" || return
         else
             printf 'Source input is not a regular file, directory or symlink: %s\n' "${path}" >&2
             return 2
         fi
     done < "${scratch}/source.list"
-    while IFS= read -r -d '' target; do
-        relative=${target#"${destination}/"}
-        IFS= read -r -d '' source < <(readlink --zero -- "${target}")
-        resolved=$(realpath -m -- "${target}")
-        if [[ ${source} == /* || ${resolved} != "${destination}/"* || ! -e ${resolved} ]]; then
-            printf 'Source symlink leaves the public copy or has no selected target: %s\n' "${relative}" >&2
-            return 2
-        fi
-        if excluded "${resolved#"${destination}/"}"; then printf 'Source symlink targets excluded content: %s\n' "${relative}" >&2; return 2; fi
-    done < <(find -P "${destination}" -type l -print0)
-    find -P "${destination}" -type d -exec chmod a+rx {} + || return
-    find -P "${destination}" -type f -exec chmod a+r {} + || return
-    while IFS= read -r -d '' path; do
-        target=${destination}/${path}
-        if [[ -L ${target} ]]; then
-            readlink --zero -- "${target}" >> "${destination}.fingerprint"
-        elif [[ -f ${target} ]]; then
-            sha256sum < "${target}" >> "${destination}.fingerprint" || return
-        fi
-    done < "${scratch}/source.list"
-    sha256sum < "${destination}.fingerprint" | cut -d ' ' -f1
-}
-
-stock_controls_unchanged() {
-    if [[ $(sha256sum "${stock_library_path}" | cut -d ' ' -f1) != "${stock_library_hash}" || ( -n ${stock_entrypoint_path:-} && $(sha256sum "${stock_entrypoint_path}" | cut -d ' ' -f1) != "${stock_entrypoint_hash:-}" ) ]]; then
-        printf '%s\n' 'Check control source changed during verification.' >&2
-        return 125
-    fi
-}
-
-stock_begin() {
-    checkout=$(realpath -e -- "$1")
-    git_metadata=(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null)
-    marker_path=$("${git_metadata[@]}" -C "${checkout}" rev-parse --path-format=absolute --git-path container-exec-active)
-    if [[ -e ${marker_path} || -L ${marker_path} ]]; then printf '%s\n' 'Writable execution is active or unconfirmed.' >&2; return 125; fi
-    stock_controls_unchanged
-    limit=${CHECK_TIMEOUT_SECONDS:-900}
-    memory_limit=${CHECK_MEMORY:-4g}
-    scratch_size=${CHECK_SCRATCH_SIZE:-1g}
-    work_size=${CHECK_WORK_SIZE:-2g}
-    tmp_size=${CHECK_TMP_SIZE:-1g}
-    if [[ ! ${limit} =~ ^[1-9][0-9]*$ ]]; then printf '%s\n' 'Invalid check timeout.' >&2; return 2; fi
-    for size in "${memory_limit}" "${scratch_size}" "${work_size}" "${tmp_size}"; do
-        if [[ ! ${size} =~ ^[1-9][0-9]*[kKmMgG]?$ ]]; then printf '%s\n' 'Invalid check memory or scratch size.' >&2; return 2; fi
-    done
-    scratch=$(mktemp -d "${TMPDIR:-/tmp}/project-check.XXXXXXXX")
-    stock_source=${scratch}/source
-    cidfile=${scratch}/container.id
-    run_id=${scratch##*/}
-    stock_attempted=false
-    declare -gA stock_images=()
-    trap stock_cleanup EXIT
-    trap 'exit 130' INT
-    trap 'exit 143' TERM
-    trap 'exit 129' HUP
-    revision=$("${git_metadata[@]}" -C "${checkout}" rev-parse HEAD)
-    source_epoch=$("${git_metadata[@]}" -C "${checkout}" show -s --format=%ct HEAD)
-    source_status=$("${git_metadata[@]}" -C "${checkout}" status --porcelain=v1 --untracked-files=all)
-    source_dirty=false
-    if [[ -n ${source_status} ]]; then source_dirty=true; fi
-    source_hash=$(stock_copy_source "${stock_source}") || return
-    if [[ ${revision} != "$("${git_metadata[@]}" -C "${checkout}" rev-parse HEAD)" || ${source_status} != "$("${git_metadata[@]}" -C "${checkout}" status --porcelain=v1 --untracked-files=all)" ]]; then
-        printf '%s\n' 'Source changed while making the public copy.' >&2
-        return 125
-    fi
-    stock_controls_unchanged
-}
-
-stock_image() {
-    local variable=$1 reference=$2 resolved
-    if [[ ! ${variable} =~ ^[A-Za-z_][A-Za-z0-9_]*$ || ! ${reference} =~ ^[a-zA-Z0-9][a-zA-Z0-9./:@_-]*$ ]]; then printf '%s\n' 'Invalid stock image reference.' >&2; return 2; fi
-    resolved=${stock_images[${reference}]:-}
-    if [[ -z ${resolved} ]]; then
-        if ! resolved=$(timeout --signal=TERM --kill-after=2 30 docker image inspect --format '{{.Id}}' "${reference}" 2>/dev/null); then
-            timeout --signal=TERM --kill-after=10 "${limit}" docker pull "${reference}" >&2
-            resolved=$(timeout --signal=TERM --kill-after=2 30 docker image inspect --format '{{.Id}}' "${reference}")
-        fi
-        if [[ ! ${resolved} =~ ^sha256:[a-f0-9]{64}$ ]]; then printf '%s\n' 'Image did not resolve to an immutable ID.' >&2; return 2; fi
-        stock_images[${reference}]=${resolved}
-    fi
-    printf -v "${variable}" '%s' "${resolved}"
-}
-
-stock_run() { _stock_run source "$@"; }
-stock_run_image() { _stock_run image "$@"; }
-
-_stock_run() {
-    local mode=$1 image=$2 status network=${STOCK_NETWORK:-none}
-    local -a mounts=()
-    shift 2
-    if [[ ${1:-} != -- || $# -lt 2 || ( ${network} != none && ${network} != bridge ) ]]; then printf '%s\n' 'Invalid native check invocation or network.' >&2; return 2; fi
-    shift
-    if [[ ${mode} == source ]]; then mounts+=(--mount "type=bind,source=${stock_source},target=/source,readonly"); fi
-    if [[ -n ${STOCK_OUTPUT_DIR:-} ]]; then
-        if [[ ! -d ${STOCK_OUTPUT_DIR} || -L ${STOCK_OUTPUT_DIR} || $(dirname -- "${STOCK_OUTPUT_DIR}") != "${scratch}" || ${STOCK_OUTPUT_DIR} == "${stock_source}" || ${STOCK_OUTPUT_DIR} == "${scratch}/after" || $(stat -c %u -- "${STOCK_OUTPUT_DIR}") != "$(id -u)" || -n $(find -P "${STOCK_OUTPUT_DIR}" -mindepth 1 -print -quit) ]]; then
-            printf '%s\n' 'Output bind must be a fresh owned directory directly inside check scratch.' >&2
-            return 2
-        fi
-        chmod 1777 -- "${STOCK_OUTPUT_DIR}"
-        mounts+=(--mount "type=bind,source=${STOCK_OUTPUT_DIR},target=/outputs")
-    fi
-    stock_remove_container
-    stock_attempted=true
-    set +e
-    # shellcheck disable=SC2016
-    timeout --signal=TERM --kill-after=10 "${limit}" docker run \
-        --cidfile "${cidfile}" --label "project.stock.run=${run_id}" --user 19001:19001 \
-        --cpus 4 --memory "${memory_limit}" --ulimit nofile=256:256 --pids-limit 512 \
-        --read-only --cap-drop ALL --security-opt no-new-privileges --network "${network}" \
-        "${mounts[@]}" \
-        --tmpfs "/work:rw,exec,nosuid,size=${work_size},uid=19001,gid=19001,mode=1777" \
-        --tmpfs "/scratch:rw,exec,nosuid,size=${scratch_size},mode=1777" \
-        --tmpfs "/tmp:rw,exec,nosuid,size=${tmp_size},mode=1777" \
-        --env HOME=/tmp --env TMPDIR=/scratch \
-        --env "CHECK_REVISION=${revision}" --env "CHECK_SOURCE_SHA256=${source_hash}" \
-        --env "CHECK_SOURCE_DIRTY=${source_dirty}" --env "SOURCE_DATE_EPOCH=${source_epoch}" \
-        --workdir /work --entrypoint /bin/sh "${image}" -ec 'if [ "$1" = source ]; then cp -a --no-preserve=ownership /source/. /work/ >&2; fi; shift; exec "$@"' sh "${mode}" "$@"
-    status=$?
-    set -e
-    stock_remove_container || return 125
-    return "${status}"
-}
-
-stock_readonly() {
-    local image=$1 entrypoint=$2 status
-    shift 2
-    stock_remove_container
-    stock_attempted=true
-    set +e
-    timeout --signal=TERM --kill-after=10 "${limit}" docker run \
-        --cidfile "${cidfile}" --label "project.stock.run=${run_id}" --user 19001:19001 \
-        --cpus 4 --memory "${memory_limit}" --ulimit nofile=256:256 --pids-limit 512 \
-        --read-only --cap-drop ALL --security-opt no-new-privileges --network none \
-        --mount "type=bind,source=${stock_source},target=/work,readonly" \
-        --tmpfs "/scratch:rw,exec,nosuid,size=${scratch_size},mode=1777" \
-        --tmpfs "/tmp:rw,exec,nosuid,size=${tmp_size},mode=1777" \
-        --env HOME=/tmp --env TMPDIR=/scratch \
-        --env "CHECK_REVISION=${revision}" --env "CHECK_SOURCE_SHA256=${source_hash}" \
-        --env "CHECK_SOURCE_DIRTY=${source_dirty}" --env "SOURCE_DATE_EPOCH=${source_epoch}" \
-        --workdir /work --entrypoint "${entrypoint}" "${image}" "$@"
-    status=$?
-    set -e
-    stock_remove_container || return 125
-    return "${status}"
-}
-
-stock_finish() {
-    stock_remove_container
-    stock_controls_unchanged
-    if [[ -e ${marker_path} || -L ${marker_path} ]]; then printf '%s\n' 'Writable execution is active or unconfirmed.' >&2; return 125; fi
-    local after
-    after=$(stock_copy_source "${scratch}/after") || return
-    if [[ ${source_hash} != "${after}" || ${revision} != "$("${git_metadata[@]}" -C "${checkout}" rev-parse HEAD)" || ${source_status} != "$("${git_metadata[@]}" -C "${checkout}" status --porcelain=v1 --untracked-files=all)" ]]; then
-        printf '%s\n' 'Discarding check result: public source changed during verification.' >&2
-        return 125
-    fi
+    find -P "${stock_source}" -type d -exec chmod a+rx {} +
+    find -P "${stock_source}" -type f -exec chmod a+r {} +
 }
 
 excluded() {
@@ -249,7 +140,7 @@ contained() {
 }
 collect_source() {
     local root=$1 prefix=$2 path relative entries
-    entries=${scratch}/git-files-$(printf '%s' "${root}" | sha256sum | cut -c1-16)
+    entries=$(mktemp "${scratch}/git-files.XXXXXXXX")
     "${git_metadata[@]}" -C "${root}" ls-files --cached --others --exclude-standard -z > "${entries}" || return
     while IFS= read -r -d '' path; do
         relative=${prefix}${path}

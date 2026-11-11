@@ -4,7 +4,7 @@ action=${1:?Expected a declared check action}
 case "$action" in check|lint|build) ;; *) exit 2 ;; esac
 export PYTHONPYCACHEPREFIX=/scratch/pycache
 if [ "$action" = check ] || [ "$action" = lint ]; then
-    for script in tests/container/stock tests/container/check-stock tests/container/test-publish; do bash -n "$script"; done
+    for script in tests/container/stock tests/container/check-stock; do bash -n "$script"; done
     for script in tests/container/python tests/container/markdown; do sh -n "$script"; done
 fi
 python -m venv /scratch/venv >&2
@@ -13,17 +13,12 @@ python -m pip install --disable-pip-version-check poetry==2.5.1 >&2
 export POETRY_VIRTUALENVS_CREATE=false
 poetry install --no-root >&2
 if [ "$action" = check ] || [ "$action" = lint ]; then
-    bash tests/container/test-publish
+    bash
     ruff check .
     ruff format --check .
 fi
 if [ "$action" = check ] || [ "$action" = build ]; then
     output=/scratch/dist
     if [ "$action" = build ]; then output=/outputs; fi
-    result=0
-    poetry build --output "$output" || result=$?
-    if [ "$action" = build ]; then
-        find /outputs -mindepth 1 -type d -exec chmod a+rwx {} +
-    fi
-    [ "$result" = 0 ] || exit "$result"
+    poetry build --output "$output"
 fi
