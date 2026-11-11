@@ -119,18 +119,138 @@ jobs:
             exit 125
           fi
           stock_image native_image "python:$(cat .python-version)"
-          stock_prepare "${native_image}" native -- sh -ec 'python -m venv /scratch/venv >&2
+          publish_package() (
+              set -euo pipefail
+              target=dist
+              kind=python
+              generated=${scratch}/build-output
+              stage=
+              backup=
+              stage_identity=
+              backup_identity=
+              old_identity=
+              publication_identity() {
+                  if [[ -d $1 && ! -L $1 ]]; then stat -c '%d:%i' -- "$1"; fi
+              }
+              # The cleanup trap calls this helper.
+              # shellcheck disable=SC2329
+              publication_remove_owned() {
+                  path=$1
+                  identity=$2
+                  if [[ ! -e ${path} && ! -L ${path} ]]; then return 0; fi
+                  if [[ -z ${identity} || $(publication_identity "${path}") != "${identity}" || -n $(find -P "${path}" -type l -print -quit) ]]; then
+                      printf 'Preserve changed publication path: %s/%s\n' "${checkout}" "${path}" >&2
+                      return 125
+                  fi
+                  find -P "${path}" -depth -delete
+              }
+              # EXIT and signal traps call this callback.
+              # shellcheck disable=SC2329
+              publication_cleanup() {
+                  result=$?
+                  trap - EXIT INT TERM HUP
+                  set +e
+                  if (( result != 0 )); then
+                      if [[ -n ${stage_identity} && $(publication_identity "${target}") == "${stage_identity}" && ! -e ${stage} && ! -L ${stage} ]]; then
+                          mv -T --no-clobber -- "${target}" "${stage}"
+                          if [[ $(publication_identity "${stage}") != "${stage_identity}" ]]; then result=125; fi
+                      fi
+                      if [[ -n ${old_identity} && -n ${backup} && $(publication_identity "${backup}") == "${old_identity}" ]]; then
+                          if [[ ! -e ${target} && ! -L ${target} ]]; then
+                              mv -T --no-clobber -- "${backup}" "${target}"
+                              if [[ $(publication_identity "${target}") != "${old_identity}" || -e ${backup} || -L ${backup} ]]; then result=125; fi
+                          else
+                              printf 'Preserve concurrent output and recover original from: %s/%s\n' "${checkout}" "${backup}" >&2
+                              result=125
+                          fi
+                      fi
+                  fi
+                  if [[ -n ${stage} ]]; then publication_remove_owned "${stage}" "${stage_identity}" || result=125; fi
+                  if [[ -n ${backup} && ( -e ${backup} || -L ${backup} ) ]]; then
+                      if (( result == 0 )); then
+                          publication_remove_owned "${backup}" "${old_identity}" || result=125
+                      elif [[ $(publication_identity "${backup}") == "${backup_identity}" ]]; then
+                          publication_remove_owned "${backup}" "${backup_identity}" || result=125
+                      fi
+                  fi
+                  exit "${result}"
+              }
+              trap publication_cleanup EXIT
+              trap 'exit 130' INT
+              trap 'exit 143' TERM
+              trap 'exit 129' HUP
+              [[ $(pwd -P) == "${checkout}" && $(realpath -e -- "${checkout}") == "${checkout}" ]]
+              [[ -d ${generated} && ! -L ${generated} && $(stat -c %u -- "${generated}") == "$(id -u)" ]]
+              git_control=(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null)
+              validate_target() {
+                  [[ ! -L ${target} && ( ! -e ${target} || -d ${target} ) ]]
+                  current_head=$("${git_control[@]}" rev-parse HEAD)
+                  [[ ${current_head} == "${revision}" ]]
+                  index_entries=$("${git_control[@]}" ls-files -- "${target}")
+                  head_entries=$("${git_control[@]}" ls-tree -r --name-only HEAD -- "${target}")
+                  [[ -z ${index_entries} && -z ${head_entries} ]]
+                  "${git_control[@]}" check-ignore --quiet --no-index "${target}/"
+                  if [[ -e ${target} ]]; then
+                      find -P "${target}" -print0 > "${scratch}/package-existing.list"
+                      while IFS= read -r -d '' entry; do
+                          [[ ! -L ${entry} && ( -f ${entry} || -d ${entry} ) ]]
+                          "${git_control[@]}" check-ignore --quiet --no-index "${entry}"
+                      done < "${scratch}/package-existing.list"
+                  fi
+              }
+              validate_target
+              find -P "${generated}" -mindepth 1 -print0 > "${scratch}/package-generated.list"
+              wheels=0
+              sources=0
+              gems=0
+              while IFS= read -r -d '' entry; do
+                  [[ -f ${entry} && ! -L ${entry} && $(dirname -- "${entry}") == "${generated}" && $(stat -c %h -- "${entry}") == 1 ]]
+                  name=${entry##*/}
+                  [[ ${name} =~ ^[a-zA-Z0-9][a-zA-Z0-9._+-]*$ ]]
+                  case "${kind}:${name}" in
+                      python:*.whl) wheels=$((wheels + 1)) ;;
+                      python:*.tar.gz) sources=$((sources + 1)) ;;
+                      ruby:*.gem) gems=$((gems + 1)) ;;
+                      *) printf 'Unexpected package output: %s\n' "${name}" >&2; exit 2 ;;
+                  esac
+                  "${git_control[@]}" check-ignore --quiet --no-index "${target}/${name}"
+              done < "${scratch}/package-generated.list"
+              if [[ ${kind} == python ]]; then
+                  [[ ${wheels} == 1 && ${sources} == 1 && ${gems} == 0 ]]
+              else
+                  [[ ${gems} == 1 && ${wheels} == 0 && ${sources} == 0 ]]
+              fi
+              stage=$(mktemp -d ".${target}-stage.XXXXXXXX")
+              stage_identity=$(stat -c '%d:%i' -- "${stage}")
+              cp -R -- "${generated}/." "${stage}/"
+              find -P "${stage}" -type d -exec chmod u+rwx,go+rx,go-w {} +
+              find -P "${stage}" -type f -exec chmod u+rw,go+r,go-w {} +
+              validate_target
+              if [[ -e ${target} ]]; then
+                  old_identity=$(publication_identity "${target}")
+                  backup=$(mktemp -d ".${target}-backup.XXXXXXXX")
+                  backup_identity=$(publication_identity "${backup}")
+                  [[ $(publication_identity "${target}") == "${old_identity}" && $(publication_identity "${backup}") == "${backup_identity}" ]]
+                  mv -T -- "${target}" "${backup}"
+              fi
+              mv -T --no-clobber -- "${stage}" "${target}"
+              [[ ! -e ${stage} && ! -L ${stage} && $(publication_identity "${target}") == "${stage_identity}" ]]
+          )
+          build_output=${scratch}/build-output
+          mkdir "${build_output}"
+          STOCK_OUTPUT_DIR=${build_output} STOCK_NETWORK=bridge stock_run "${native_image}" -- sh -ec 'python -m venv /scratch/venv >&2
           /scratch/venv/bin/python -m pip install --disable-pip-version-check poetry==2.5.1 >&2
           export VIRTUAL_ENV=/scratch/venv PATH="/scratch/venv/bin:$PATH" POETRY_VIRTUALENVS_CREATE=false
           poetry install --no-root >&2
-          tar --create --file - --directory / scratch/venv
-          '
-          outputs=(dist)
-          stock_run "${native_image}" native -- sh -ec 'export VIRTUAL_ENV=/scratch/venv PATH="/scratch/venv/bin:$PATH"
+          export VIRTUAL_ENV=/scratch/venv PATH="/scratch/venv/bin:$PATH"
           export POETRY_VIRTUALENVS_CREATE=false
-          poetry build
+          result=0
+          poetry build --output /outputs || result=$?
+          find /outputs -mindepth 1 -type d -exec chmod a+rwx {} +
+          exit "$result"
           '
           stock_finish
+          publish_package
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7.0.2

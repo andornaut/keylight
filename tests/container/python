@@ -1,25 +1,29 @@
 #!/bin/sh
 set -eu
+action=${1:?Expected a declared check action}
+case "$action" in check|lint|build) ;; *) exit 2 ;; esac
+export PYTHONPYCACHEPREFIX=/scratch/pycache
+if [ "$action" = check ] || [ "$action" = lint ]; then
+    for script in tests/container/stock tests/container/check-stock tests/container/test-publish; do bash -n "$script"; done
+    for script in tests/container/python tests/container/markdown; do sh -n "$script"; done
+fi
+python -m venv /scratch/venv >&2
 export VIRTUAL_ENV=/scratch/venv PATH="/scratch/venv/bin:$PATH"
+python -m pip install --disable-pip-version-check poetry==2.5.1 >&2
 export POETRY_VIRTUALENVS_CREATE=false
-case "$1" in
-    prepare)
-        python -m venv /scratch/venv >&2
-        /scratch/venv/bin/python -m pip install --disable-pip-version-check poetry==2.5.1 >&2
-        poetry install --no-root >&2
-        exec tar --create --file - --directory / scratch/venv
-        ;;
-    check)
-        for task in lint build; do sh "$0" "$task"; done
-        ;;
-    lint)
-        for script in tests/container/stock tests/container/check-stock; do bash -n "$script"; done
-        for script in tests/container/python tests/container/markdown; do sh -n "$script"; done
-        ruff check .
-        ruff format --check .
-        ;;
-    build)
-        exec poetry build
-        ;;
-    *) exit 2 ;;
-esac
+poetry install --no-root >&2
+if [ "$action" = check ] || [ "$action" = lint ]; then
+    bash tests/container/test-publish
+    ruff check .
+    ruff format --check .
+fi
+if [ "$action" = check ] || [ "$action" = build ]; then
+    output=/scratch/dist
+    if [ "$action" = build ]; then output=/outputs; fi
+    result=0
+    poetry build --output "$output" || result=$?
+    if [ "$action" = build ]; then
+        find /outputs -mindepth 1 -type d -exec chmod a+rwx {} +
+    fi
+    [ "$result" = 0 ] || exit "$result"
+fi

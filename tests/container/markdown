@@ -1,14 +1,6 @@
 #!/bin/sh
 set -eu
-case "$1" in
-    prepare)
-        mkdir -p /scratch/markdown
-        cp tests/container/package.json tests/container/package-lock.json /scratch/markdown/
-        npm ci --prefix /scratch/markdown --ignore-scripts --no-audit --no-fund --maxsockets=1 >&2
-        exec tar --create --file - --directory / scratch/markdown
-        ;;
-    lint)
-        exec /scratch/markdown/node_modules/.bin/markdownlint-cli2
-        ;;
-    *) exit 2 ;;
-esac
+mkdir -p /scratch/markdown
+cp tests/container/package.json tests/container/package-lock.json /scratch/markdown/
+npm ci --prefix /scratch/markdown --ignore-scripts --no-audit --no-fund --maxsockets=1 >&2
+exec /scratch/markdown/node_modules/.bin/markdownlint-cli2
