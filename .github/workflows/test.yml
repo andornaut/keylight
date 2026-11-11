@@ -46,71 +46,81 @@ jobs:
           persist-credentials: false
 
       - name: Run native lint
+        shell: bash
         run: |
-          set -eu
-          scratch=$(mktemp -d)
-          SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
-          export SOURCE_DATE_EPOCH
-          image="python:$(cat .python-version)"
-          docker run --rm -i --platform linux/amd64 --read-only \
-            --user "$(id -u):$(id -g)" --cap-drop ALL \
-            --security-opt no-new-privileges --cpus 4 --memory 4g --pids-limit 512 \
-            --mount "type=bind,src=$PWD,dst=/project,readonly" \
-            --mount "type=bind,src=$scratch,dst=/scratch" \
-            -e SOURCE_DATE_EPOCH \
-            -e HOME=/scratch/home -e TMPDIR=/scratch/tmp \
-            -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPYCACHEPREFIX=/scratch/pycache \
-            -e RUFF_CACHE_DIR=/scratch/ruff \
-            "$image" sh -se <<'CONTAINER'
-          mkdir -p /scratch/home /scratch/tmp
-          cd /project
-          python -m venv /scratch/venv
-          . /scratch/venv/bin/activate
+          set -euo pipefail
+          : "${GITHUB_SHA:?CI requires its expected source commit}"
+          ci_revision=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse HEAD)
+          ci_status=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null status --porcelain=v1 --untracked-files=all)
+          if [[ ${ci_revision} != "${GITHUB_SHA}" || -n ${ci_status} ]]; then
+            printf '%s\n' 'CI requires the clean expected source commit.' >&2
+            exit 125
+          fi
+          source tests/container/stock
+          stock_begin "$PWD"
+          if [[ ${revision} != "${GITHUB_SHA}" || ${source_dirty} != false ]]; then
+            printf '%s\n' 'CI source changed before snapshot capture.' >&2
+            exit 125
+          fi
+          stock_image native_image "python:$(cat .python-version)"
+          stock_prepare "${native_image}" native -- sh -ec 'python -m venv /scratch/venv >&2
+          /scratch/venv/bin/python -m pip install --disable-pip-version-check poetry==2.5.1 >&2
+          export VIRTUAL_ENV=/scratch/venv PATH="/scratch/venv/bin:$PATH" POETRY_VIRTUALENVS_CREATE=false
+          poetry install --no-root >&2
+          tar --create --file - --directory / scratch/venv
+          '
+          stock_run "${native_image}" native -- sh -ec 'export VIRTUAL_ENV=/scratch/venv PATH="/scratch/venv/bin:$PATH"
           export POETRY_VIRTUALENVS_CREATE=false
-          python -m pip install --disable-pip-version-check poetry==2.5.1
-          poetry install --no-root
-          poetry run ruff check .
-          poetry run ruff format --check .
-          CONTAINER
+          for script in tests/container/run tests/container/stock tests/container/check-stock; do bash -n "$script"; done
+          for script in tests/container/check tests/container/python tests/container/markdown; do sh -n "$script"; done
+          ruff check .
+          ruff format --check .
+          '
+          stock_finish
 
       - name: Lint Markdown
+        shell: bash
         run: |
-          set -eu
-          scratch=$(mktemp -d)
-          SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
-          export SOURCE_DATE_EPOCH
-          image="node:24.22.2"
-          docker run --rm -i --platform linux/amd64 --read-only \
-            --user "$(id -u):$(id -g)" --cap-drop ALL \
-            --security-opt no-new-privileges --cpus 4 --memory 4g --pids-limit 512 \
-            --mount "type=bind,src=$PWD,dst=/project,readonly" \
-            --mount "type=bind,src=$scratch,dst=/scratch" \
-            -e SOURCE_DATE_EPOCH \
-            -e HOME=/scratch/home -e TMPDIR=/scratch/tmp \
-            -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPYCACHEPREFIX=/scratch/pycache \
-            -e RUFF_CACHE_DIR=/scratch/ruff \
-            "$image" sh -se <<'CONTAINER'
-          mkdir -p /scratch/home /scratch/tmp
-          cd /project
-          mkdir -p /scratch/tools
-          cp /project/tests/container/package.json /project/tests/container/package-lock.json /scratch/tools/
-          cd /scratch/tools
-          npm ci --ignore-scripts --no-audit --no-fund
-          cd /project
-          node /scratch/tools/node_modules/markdownlint-cli2/markdownlint-cli2-bin.mjs
-          CONTAINER
+          set -euo pipefail
+          : "${GITHUB_SHA:?CI requires its expected source commit}"
+          ci_revision=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse HEAD)
+          ci_status=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null status --porcelain=v1 --untracked-files=all)
+          if [[ ${ci_revision} != "${GITHUB_SHA}" || -n ${ci_status} ]]; then
+            printf '%s\n' 'CI requires the clean expected source commit.' >&2
+            exit 125
+          fi
+          source tests/container/stock
+          stock_begin "$PWD"
+          if [[ ${revision} != "${GITHUB_SHA}" || ${source_dirty} != false ]]; then
+            printf '%s\n' 'CI source changed before snapshot capture.' >&2
+            exit 125
+          fi
+          stock_image markdown_image node:24.22.2
+          stock_prepare "${markdown_image}" markdown -- sh -ec 'mkdir -p /scratch/markdown
+          cp tests/container/package.json tests/container/package-lock.json /scratch/markdown/
+          npm ci --prefix /scratch/markdown --ignore-scripts --no-audit --no-fund --maxsockets=1 >&2
+          tar --create --file - --directory / scratch/markdown
+          '
+          stock_run "${markdown_image}" markdown -- /scratch/markdown/node_modules/.bin/markdownlint-cli2
+          stock_finish
 
       - name: Lint shell scripts
+        shell: bash
         run: |
-          set -eu
-          scratch=$(mktemp -d)
-          SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
-          export SOURCE_DATE_EPOCH
-          docker run --rm --platform linux/amd64 --read-only \
-            --user "$(id -u):$(id -g)" --cap-drop ALL \
-            --security-opt no-new-privileges --cpus 4 --memory 4g --pids-limit 512 \
-            --mount "type=bind,src=$PWD,dst=/project,readonly" \
-            --mount "type=bind,src=$scratch,dst=/scratch" \
-            -e SOURCE_DATE_EPOCH \
-            --workdir /project koalaman/shellcheck:v0.11.0 \
-            -x -P SCRIPTDIR tests/container/run tests/container/check tests/container/stock tests/container/check-stock tests/container/python tests/container/markdown
+          set -euo pipefail
+          : "${GITHUB_SHA:?CI requires its expected source commit}"
+          ci_revision=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse HEAD)
+          ci_status=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null status --porcelain=v1 --untracked-files=all)
+          if [[ ${ci_revision} != "${GITHUB_SHA}" || -n ${ci_status} ]]; then
+            printf '%s\n' 'CI requires the clean expected source commit.' >&2
+            exit 125
+          fi
+          source tests/container/stock
+          stock_begin "$PWD"
+          if [[ ${revision} != "${GITHUB_SHA}" || ${source_dirty} != false ]]; then
+            printf '%s\n' 'CI source changed before snapshot capture.' >&2
+            exit 125
+          fi
+          stock_image shellcheck_image koalaman/shellcheck:v0.11.0
+          stock_readonly "${shellcheck_image}" /bin/shellcheck -x -P SCRIPTDIR tests/container/run tests/container/check tests/container/stock tests/container/check-stock tests/container/python tests/container/markdown
+          stock_finish

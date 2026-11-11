@@ -92,37 +92,35 @@ jobs:
           fi
 
       - name: Build the distribution
+        shell: bash
         run: |
-          set -eu
-          scratch=$(mktemp -d)
-          SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
-          export SOURCE_DATE_EPOCH
-          image="python:$(cat .python-version)"
-          docker run --rm -i --platform linux/amd64 --read-only \
-            --user "$(id -u):$(id -g)" --cap-drop ALL \
-            --security-opt no-new-privileges --cpus 4 --memory 4g --pids-limit 512 \
-            --mount "type=bind,src=$PWD,dst=/project,readonly" \
-            --mount "type=bind,src=$scratch,dst=/scratch" \
-            -e SOURCE_DATE_EPOCH \
-            -e HOME=/scratch/home -e TMPDIR=/scratch/tmp \
-            -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPYCACHEPREFIX=/scratch/pycache \
-            "$image" sh -se <<'CONTAINER'
-          mkdir -p /scratch/home /scratch/tmp /scratch/work
-          test "$(uname -m)" = x86_64
-          cp -R /project/keylight /scratch/work/
-          cp /project/pyproject.toml /project/poetry.lock /project/README.md /project/LICENSE /scratch/work/
-          cd /scratch/work
-          python -m venv /scratch/venv
-          . /scratch/venv/bin/activate
-          python --version
+          set -euo pipefail
+          : "${GITHUB_SHA:?CI requires its expected source commit}"
+          ci_revision=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse HEAD)
+          ci_status=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null status --porcelain=v1 --untracked-files=all)
+          if [[ ${ci_revision} != "${GITHUB_SHA}" || -n ${ci_status} ]]; then
+            printf '%s\n' 'CI requires the clean expected source commit.' >&2
+            exit 125
+          fi
+          source tests/container/stock
+          stock_begin "$PWD"
+          if [[ ${revision} != "${GITHUB_SHA}" || ${source_dirty} != false ]]; then
+            printf '%s\n' 'CI source changed before snapshot capture.' >&2
+            exit 125
+          fi
+          stock_image native_image "python:$(cat .python-version)"
+          stock_prepare "${native_image}" native -- sh -ec 'python -m venv /scratch/venv >&2
+          /scratch/venv/bin/python -m pip install --disable-pip-version-check poetry==2.5.1 >&2
+          export VIRTUAL_ENV=/scratch/venv PATH="/scratch/venv/bin:$PATH" POETRY_VIRTUALENVS_CREATE=false
+          poetry install --no-root >&2
+          tar --create --file - --directory / scratch/venv
+          '
+          outputs=(dist)
+          stock_run "${native_image}" native -- sh -ec 'export VIRTUAL_ENV=/scratch/venv PATH="/scratch/venv/bin:$PATH"
           export POETRY_VIRTUALENVS_CREATE=false
-          python -m pip install --disable-pip-version-check poetry==2.5.1
-          poetry --version
-          poetry install --no-root
           poetry build
-          CONTAINER
-          mkdir -p dist
-          cp "$scratch/work/dist/"* dist/
+          '
+          stock_finish
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7.0.2
