@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+checkout=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
+stock_entrypoint_path=${BASH_SOURCE[0]}
+stock_entrypoint_hash=$(sha256sum "${stock_entrypoint_path}" | cut -d ' ' -f1)
+# shellcheck source=tests/container/stock
+source "${checkout}/tests/container/stock"
+action=${1:-check}
+case "${action}" in check|lint|build) ;; *) printf 'No %s check declared\n' "${action}" >&2; exit 2 ;; esac
+if (( $# > 1 )); then printf '%s\n' 'Stock checks do not accept extra arguments.' >&2; exit 2; fi
+: "${PYTHON_IMAGE:?The Makefile declares PYTHON_IMAGE}"
+stock_begin "${checkout}"
+native_image=
+markdown_image=
+shellcheck_image=
+stock_image native_image "${PYTHON_IMAGE}"
+stock_prepare "${native_image}" native -- sh tests/container/python prepare
+if [[ ${action} == build ]]; then outputs=(dist); fi
+stock_run "${native_image}" native -- sh tests/container/python "${action}"
+if [[ ${action} == check || ${action} == lint ]]; then
+    : "${MARKDOWN_IMAGE:?The Makefile declares MARKDOWN_IMAGE}"
+    : "${SHELLCHECK_IMAGE:?The Makefile declares SHELLCHECK_IMAGE}"
+    stock_image markdown_image "${MARKDOWN_IMAGE}"
+    stock_image shellcheck_image "${SHELLCHECK_IMAGE}"
+    stock_prepare "${markdown_image}" markdown -- sh tests/container/markdown prepare
+    stock_run "${markdown_image}" markdown -- sh tests/container/markdown lint
+    stock_readonly "${shellcheck_image}" /bin/shellcheck -x -P SCRIPTDIR \
+        tests/container/run tests/container/check tests/container/stock \
+        tests/container/check-stock tests/container/python tests/container/markdown
+fi
+stock_finish
