@@ -102,6 +102,16 @@ jobs:
             printf '%s\n' 'CI requires the clean expected source commit.' >&2
             exit 125
           fi
+          if [[ ! ${GITHUB_SHA} =~ ^[a-f0-9]{40}$ ]]; then
+            printf '%s\n' 'CI requires a full expected commit SHA.' >&2
+            exit 125
+          fi
+          ci_control_blob=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse --verify "${GITHUB_SHA}:tests/container/stock")
+          ci_control_entry=$(git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null ls-tree "${GITHUB_SHA}" -- tests/container/stock)
+          if [[ ${ci_control_entry} != "100755 blob ${ci_control_blob}"$'\t'"tests/container/stock" || ! -f tests/container/stock || -L tests/container/stock || ! -x tests/container/stock || $(git hash-object --no-filters -- tests/container/stock) != "${ci_control_blob}" ]]; then
+            printf '%s\n' 'CI stock control source differs from the expected executable blob.' >&2
+            exit 125
+          fi
           source tests/container/stock
           stock_begin "$PWD"
           if [[ ${revision} != "${GITHUB_SHA}" || ${source_dirty} != false ]]; then
