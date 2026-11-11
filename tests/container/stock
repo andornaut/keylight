@@ -36,7 +36,7 @@ stock_run() {
     shift 2
     stock_copy_source || return
     # shellcheck disable=SC2016
-    _stock_container source "${image}" /bin/sh -ec 'cp -a --no-preserve=ownership /source/. /work/ >&2; exec "$@"' sh "$@"
+    _stock_container source "${image}" /bin/sh -ec 'cp -R -P /source/. /work/ >&2; exec "$@"' sh "$@"
 }
 
 stock_run_image() {
