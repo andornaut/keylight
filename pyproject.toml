@@ -17,7 +17,7 @@ python = "~3.12"
 leglight = "^0.2.0"
 # Imported directly to catch the errors leglight raises through it.
 requests = "^2.32"
-typer = "^0.27.0"
+typer = ">=0.27,<0.30"
 
 [tool.poetry.scripts]
 keylight = "keylight.main:main"
