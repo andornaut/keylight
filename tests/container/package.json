@@ -2,7 +2,7 @@
   "name": "project-check-tools",
   "private": true,
   "dependencies": {
-    "markdownlint-cli2": "0.24.0"
+    "markdownlint-cli2": "0.24.1"
   },
   "overrides": {
     "markdownlint-cli2@0.24.0": {
